@@ -186,7 +186,7 @@ export default function AdminPage() {
   if (!authed) {
     return (
       <div className="max-w-sm mx-auto px-4 py-20">
-        <h1 className="text-xl font-serif font-bold text-masters-green mb-6 text-center">Commissioner Panel</h1>
+        <h1 className="text-xl font-serif font-bold text-masters-green mb-6 text-center">Admin Panel</h1>
         <input type="password" placeholder="Admin secret" value={secret} onChange={(e) => setSecret(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAuth()}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3 text-sm focus:outline-none focus:ring-2 focus:ring-masters-green" />
@@ -199,7 +199,7 @@ export default function AdminPage() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-serif font-bold text-masters-green">Commissioner Panel</h1>
+        <h1 className="text-2xl font-serif font-bold text-masters-green">Admin Panel</h1>
         <button onClick={loadAll} disabled={loading} className="text-sm text-masters-green underline">
           {loading ? "Refreshing..." : "Refresh"}
         </button>
@@ -228,7 +228,7 @@ export default function AdminPage() {
             Clear Override (use deadline)
           </button>
         </div>
-        <p className="text-xs text-gray-400 mt-2">Master code for direct entry edits: <code className="font-mono bg-gray-100 px-1 rounded">use the commissioner code you set</code></p>
+        <p className="text-xs text-gray-400 mt-2">Master code for direct entry edits: <code className="font-mono bg-gray-100 px-1 rounded">use the master code you set</code></p>
       </section>
 
       {/* ── Stat Sync ── */}
@@ -265,7 +265,7 @@ export default function AdminPage() {
       {/* ── Sunday Assignments ── */}
       <section className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
         <h2 className="font-bold text-gray-800 mb-1">Sunday Assignments</h2>
-        <p className="text-xs text-gray-500 mb-4">Assign a Sunday representative and team to each entry for commissioner tracking and Sunday bonus scoring.</p>
+        <p className="text-xs text-gray-500 mb-4">Assign a Sunday representative and team to each entry for admin tracking and Sunday bonus scoring.</p>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

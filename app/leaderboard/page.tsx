@@ -106,7 +106,7 @@ function LeaderboardContent() {
       )}
       {data && (
         <div className="mb-5 rounded-lg border border-gray-200 bg-white px-4 py-3 text-center text-sm text-gray-600">
-          Entry names and scores are public. Full lineups are visible only in the commissioner panel.
+          Entry names and scores are public. Full lineups stay private.
         </div>
       )}
 
