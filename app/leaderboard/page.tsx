@@ -33,6 +33,62 @@ function rankBadge(rank: number) {
   return <span className={`${base} bg-gray-100 text-gray-500`}>{rank}</span>;
 }
 
+function EntryDetailModal({ entry, onClose }: { entry: EntryScoreResult; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between">
+          <h2 className="text-lg font-bold text-masters-green">{entry.userName}</h2>
+          <button onClick={onClose} className="text-2xl leading-none text-gray-400 hover:text-gray-600">×</button>
+        </div>
+
+        <div className="mb-4">
+          <h3 className="mb-2 text-xs font-semibold uppercase text-gray-500">Lineup</h3>
+          <div className="space-y-1">
+            {entry.players.map((player) => (
+              <div key={player.playerId} className="flex justify-between text-sm">
+                <span className="font-medium">{player.playerName}</span>
+                <span className="font-mono text-xs text-gray-500">
+                  {player.position ?? "--"}{player.thru ? ` (${player.thru})` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t pt-3">
+          <h3 className="mb-2 text-xs font-semibold uppercase text-gray-500">Scores</h3>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+            {[1, 2, 3, 4].map((round) => {
+              const key = ROUND_SCORE_KEY[round] as keyof typeof entry;
+              const pts = entry[key] as number;
+              return (
+                <div key={round} className="flex justify-between">
+                  <span className="text-gray-500">{ROUND_LABELS[round]}</span>
+                  <span className="font-mono font-semibold">{fmt(pts)}</span>
+                </div>
+              );
+            })}
+            {entry.sundayBonusPoints !== 0 && (
+              <div className="col-span-2 flex justify-between">
+                <span className="text-gray-500">Sunday Bonus</span>
+                <span className="font-mono font-semibold">{fmt(entry.sundayBonusPoints)}</span>
+              </div>
+            )}
+            <div className="col-span-2 flex justify-between border-t pt-1 font-bold">
+              <span>Overall</span>
+              <span className="font-mono">{fmt(entry.scoreOverall)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LeaderboardContent() {
   const searchParams = useSearchParams();
   const submitted = searchParams.get("submitted") === "1";
@@ -42,6 +98,7 @@ function LeaderboardContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<ViewTab>("today");
+  const [selectedEntry, setSelectedEntry] = useState<EntryScoreResult | null>(null);
 
   const fetchLeaderboard = useCallback(() => {
     fetch("/api/leaderboard")
@@ -106,7 +163,9 @@ function LeaderboardContent() {
       )}
       {data && (
         <div className="mb-5 rounded-lg border border-gray-200 bg-white px-4 py-3 text-center text-sm text-gray-600">
-          Entry names and scores are public. Full lineups stay private.
+          {data.isLocked
+            ? "Entry names, scores, and full lineups are now public."
+            : "Entry names and scores are public. Full lineups unlock after the deadline."}
         </div>
       )}
 
@@ -153,7 +212,10 @@ function LeaderboardContent() {
             return (
               <div
                 key={entry.entryId}
-                className={`bg-white rounded-xl border shadow-sm overflow-hidden ${idx === 0 ? "border-masters-gold" : "border-gray-200"}`}
+                className={`overflow-hidden rounded-xl border bg-white shadow-sm ${
+                  data.isLocked ? "cursor-pointer transition-shadow hover:shadow-md" : ""
+                } ${idx === 0 ? "border-masters-gold" : "border-gray-200"}`}
+                onClick={data.isLocked ? () => setSelectedEntry(entry) : undefined}
               >
                 <div className={`flex items-center justify-between px-4 py-3 ${idx === 0 ? "bg-masters-gold/10" : "bg-gray-50"}`}>
                   <div className="flex items-center gap-3">
@@ -174,6 +236,9 @@ function LeaderboardContent() {
               </div>
             );
           })}
+          <p className="mt-2 text-center text-xs text-gray-400">
+            {data.isLocked ? "Tap an entry to see the full lineup." : "Full lineups appear here once entries lock."}
+          </p>
         </div>
       )}
 
@@ -182,6 +247,10 @@ function LeaderboardContent() {
           Build Your Lineup
         </Link>
       </div>
+
+      {data?.isLocked && selectedEntry && (
+        <EntryDetailModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
+      )}
     </div>
   );
 }
