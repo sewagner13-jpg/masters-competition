@@ -17,7 +17,7 @@ function isAuthorized(req: NextRequest): boolean {
   return req.headers.get("x-admin-secret") === process.env.ADMIN_SECRET;
 }
 
-/** GET — return all entries (with Sunday fields) + current lock state */
+/** GET — return all entries (with Sunday fields + rosters) + current lock state */
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -40,6 +40,17 @@ export async function GET(req: NextRequest) {
         sundayBonusPoints: true,
         score: true,
         status: true,
+        players: {
+          select: {
+            player: {
+              select: {
+                id: true,
+                name: true,
+                salary: true,
+              },
+            },
+          },
+        },
       },
     }),
     prisma.contestSettings.findUnique({ where: { id: "main" } }),

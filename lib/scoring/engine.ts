@@ -117,26 +117,13 @@ export function getActiveRound(): 1 | 2 | 3 | 4 | null {
 
 /**
  * Get full leaderboard data.
- * Lock state is still returned separately for UI messaging and contest controls.
+ * The public leaderboard never exposes lineup details.
+ * Commissioner-only roster access lives behind the admin endpoints.
  */
 export async function getLeaderboard(_isLocked: boolean): Promise<EntryScoreResult[]> {
   const entries = await prisma.entry.findMany({
     where: { status: "active" },
     orderBy: { score: "desc" }, // Higher = better (fantasy points)
-    include: {
-      players: {
-        include: {
-          player: {
-            include: {
-              stats: {
-                where: { eventName: EVENT_NAME },
-                take: 1,
-              },
-            },
-          },
-        },
-      },
-    },
   });
 
   return entries.map((entry) => ({
@@ -148,21 +135,9 @@ export async function getLeaderboard(_isLocked: boolean): Promise<EntryScoreResu
     scoreR4: entry.scoreR4,
     sundayBonusPoints: entry.sundayBonusPoints,
     scoreOverall: entry.score,
-    players: entry.players.map((ep) => {
-      const stat = ep.player.stats[0];
-      return {
-        playerId: ep.player.id,
-        playerName: ep.player.name,
-        position: stat?.position ?? null,
-        thru: stat?.thru ?? null,
-        r1Pts: stat?.r1Pts ?? 0,
-        r2Pts: stat?.r2Pts ?? 0,
-        r3Pts: stat?.r3Pts ?? 0,
-        r4Pts: stat?.r4Pts ?? 0,
-      };
-    }),
-    sundayRepName: entry.sundayRepName ?? null,
-    sundayTeamName: entry.sundayTeamName ?? null,
-    publicMessage: entry.publicMessage ?? null,
+    players: [],
+    sundayRepName: null,
+    sundayTeamName: null,
+    publicMessage: null,
   }));
 }

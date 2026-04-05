@@ -33,85 +33,6 @@ function rankBadge(rank: number) {
   return <span className={`${base} bg-gray-100 text-gray-500`}>{rank}</span>;
 }
 
-function EntryDetailModal({ entry, onClose }: { entry: EntryScoreResult; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div
-        className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex justify-between items-start mb-4">
-          <h2 className="text-lg font-bold text-masters-green">{entry.userName}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
-        </div>
-
-        {/* Golfers */}
-        <div className="mb-4">
-          <h3 className="text-xs font-semibold uppercase text-gray-500 mb-2">Lineup</h3>
-          <div className="space-y-1">
-            {entry.players.map((p) => (
-              <div key={p.playerId} className="flex justify-between text-sm">
-                <span className="font-medium">{p.playerName}</span>
-                <span className="text-gray-500 font-mono text-xs">
-                  {p.position ?? "--"}{p.thru ? ` (${p.thru})` : ""}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Sunday details */}
-        {(entry.sundayRepName || entry.sundayTeamName) && (
-          <div className="border-t pt-3 mb-3">
-            <h3 className="text-xs font-semibold uppercase text-gray-500 mb-2">Sunday</h3>
-            {entry.sundayRepName && (
-              <div className="text-sm"><span className="text-gray-500">Representative: </span><span className="font-medium">{entry.sundayRepName}</span></div>
-            )}
-            {entry.sundayTeamName && (
-              <div className="text-sm mt-0.5"><span className="text-gray-500">Team: </span><span className="font-medium">{entry.sundayTeamName}</span></div>
-            )}
-          </div>
-        )}
-
-        {/* Public message */}
-        {entry.publicMessage && (
-          <div className="border-t pt-3">
-            <h3 className="text-xs font-semibold uppercase text-gray-500 mb-1">Message</h3>
-            <p className="text-sm italic text-gray-700">&ldquo;{entry.publicMessage}&rdquo;</p>
-          </div>
-        )}
-
-        {/* Score summary */}
-        <div className="border-t pt-3 mt-3">
-          <h3 className="text-xs font-semibold uppercase text-gray-500 mb-2">Scores</h3>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-            {[1,2,3,4].map((r) => {
-              const key = ROUND_SCORE_KEY[r] as keyof typeof entry;
-              const pts = entry[key] as number;
-              return (
-                <div key={r} className="flex justify-between">
-                  <span className="text-gray-500">{ROUND_LABELS[r]}</span>
-                  <span className="font-mono font-semibold">{fmt(pts)}</span>
-                </div>
-              );
-            })}
-            {entry.sundayBonusPoints !== 0 && (
-              <div className="flex justify-between col-span-2">
-                <span className="text-gray-500">Sunday Bonus</span>
-                <span className="font-mono font-semibold">{fmt(entry.sundayBonusPoints)}</span>
-              </div>
-            )}
-            <div className="flex justify-between col-span-2 border-t pt-1 font-bold">
-              <span>Overall</span>
-              <span className="font-mono">{fmt(entry.scoreOverall)}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function LeaderboardContent() {
   const searchParams = useSearchParams();
   const submitted = searchParams.get("submitted") === "1";
@@ -121,7 +42,6 @@ function LeaderboardContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<ViewTab>("today");
-  const [selectedEntry, setSelectedEntry] = useState<EntryScoreResult | null>(null);
 
   const fetchLeaderboard = useCallback(() => {
     fetch("/api/leaderboard")
@@ -184,6 +104,11 @@ function LeaderboardContent() {
           🔒 Contest is locked · Lineups are final
         </div>
       )}
+      {data && (
+        <div className="mb-5 rounded-lg border border-gray-200 bg-white px-4 py-3 text-center text-sm text-gray-600">
+          Entry names and scores are public. Full lineups are visible only in the commissioner panel.
+        </div>
+      )}
 
       {/* Tab bar */}
       {data && (
@@ -228,8 +153,7 @@ function LeaderboardContent() {
             return (
               <div
                 key={entry.entryId}
-                className={`bg-white rounded-xl border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow ${idx === 0 ? "border-masters-gold" : "border-gray-200"}`}
-                onClick={() => setSelectedEntry(entry)}
+                className={`bg-white rounded-xl border shadow-sm overflow-hidden ${idx === 0 ? "border-masters-gold" : "border-gray-200"}`}
               >
                 <div className={`flex items-center justify-between px-4 py-3 ${idx === 0 ? "bg-masters-gold/10" : "bg-gray-50"}`}>
                   <div className="flex items-center gap-3">
@@ -250,7 +174,6 @@ function LeaderboardContent() {
               </div>
             );
           })}
-          <p className="text-xs text-center text-gray-400 mt-2">Tap an entry to see the full lineup</p>
         </div>
       )}
 
@@ -259,10 +182,6 @@ function LeaderboardContent() {
           Build Your Lineup
         </Link>
       </div>
-
-      {selectedEntry && (
-        <EntryDetailModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
-      )}
     </div>
   );
 }

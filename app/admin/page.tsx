@@ -18,6 +18,13 @@ interface EntryAdmin {
   sundayBonusPoints: number;
   score: number;
   status: string;
+  players: {
+    player: {
+      id: string;
+      name: string;
+      salary: number;
+    };
+  }[];
 }
 
 interface SundayTeam {
@@ -258,7 +265,7 @@ export default function AdminPage() {
       {/* ── Sunday Assignments ── */}
       <section className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
         <h2 className="font-bold text-gray-800 mb-1">Sunday Assignments</h2>
-        <p className="text-xs text-gray-500 mb-4">Assign a Sunday representative and team to each entry. These show on the leaderboard after lock.</p>
+        <p className="text-xs text-gray-500 mb-4">Assign a Sunday representative and team to each entry for commissioner tracking and Sunday bonus scoring.</p>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -360,6 +367,37 @@ export default function AdminPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </section>
+
+      <section className="bg-white border border-gray-200 rounded-xl p-5 mt-6 shadow-sm">
+        <h2 className="font-bold text-gray-800 mb-1">Protected Lineups</h2>
+        <p className="text-xs text-gray-500 mb-4">Visible only after entering the admin secret.</p>
+        {entries.length === 0 ? (
+          <p className="text-sm text-gray-400">No entries yet.</p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {[...entries]
+              .sort((a, b) => a.userName.localeCompare(b.userName))
+              .map((entry) => (
+                <div key={entry.id} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <h3 className="font-semibold text-gray-900">{entry.userName}</h3>
+                    <span className="text-xs font-mono text-gray-500">
+                      ${entry.players.reduce((sum, ep) => sum + ep.player.salary, 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    {entry.players.map((ep) => (
+                      <div key={ep.player.id} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-800">{ep.player.name}</span>
+                        <span className="font-mono text-xs text-gray-500">${ep.player.salary.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
           </div>
         )}
       </section>
