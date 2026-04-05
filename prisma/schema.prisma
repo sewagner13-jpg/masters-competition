@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id        String   @id @default(cuid())
+  name      String
+  salary    Int
+  isActive  Boolean  @default(true)
+  sourceRow Int?     // row number from spreadsheet for traceability
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries PlayerStat[]
+  entryPlayers EntryPlayer[]
+
+  @@index([isActive])
+}
+
+model Entry {
+  id          String   @id @default(cuid())
+  userName    String
+  submittedAt DateTime @default(now())
+  totalSalary Int
+  score       Float    @default(0)
+  status      String   @default("active") // active | disqualified
+
+  players EntryPlayer[]
+
+  @@index([score])
+}
+
+model EntryPlayer {
+  id       String @id @default(cuid())
+  entryId  String
+  playerId String
+
+  entry  Entry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@unique([entryId, playerId])
+}
+
+model PlayerStat {
+  id             String   @id @default(cuid())
+  playerId       String
+  eventName      String   @default("2026 Masters Tournament")
+  round          Int?
+  position       String?  // "T3", "1", "CUT", etc.
+  thru           String?  // "F", "9", "14", etc.
+  totalToPar     Int?
+  holesCompleted Int?
+  rawStatPayload Json?    // raw provider response for debugging
+  lastSyncedAt   DateTime @default(now())
+
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@unique([playerId, eventName])
+  @@index([playerId])
+}
+
+model SyncRun {
+  id             String    @id @default(cuid())
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  status         String    @default("running") // running | success | failed | skipped
+  message        String?
+  recordsUpdated Int       @default(0)
+}

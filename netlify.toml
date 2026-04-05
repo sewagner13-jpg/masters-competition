@@ -1,0 +1,25 @@
+[build]
+  command = "npx prisma generate && npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Prisma must generate its client during Netlify's CI build
+[build.processing]
+  skip_processing = false
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Scheduled function: sync stats every 15 min during ET daylight hours
+# Guard logic (ET time window check) lives inside the function itself.
+# This cron runs broadly; the function exits early if outside sync window.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Cache-Control = "no-store"
