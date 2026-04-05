@@ -10,16 +10,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getLockState } from "@/lib/lock";
 import { LOCK_DEADLINE } from "@/lib/constants";
+import { isAdminAuthorized } from "@/lib/adminAuth";
 
 export const dynamic = "force-dynamic";
 
-function isAuthorized(req: NextRequest): boolean {
-  return req.headers.get("x-admin-secret") === process.env.ADMIN_SECRET;
-}
-
 /** GET — return all entries (with Sunday fields + rosters) + current lock state */
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isAdminAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -68,7 +65,7 @@ export async function GET(req: NextRequest) {
 
 /** POST — update Sunday rep/team/isPlayingSunday for one entry */
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isAdminAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -95,7 +92,7 @@ export async function POST(req: NextRequest) {
 
 /** PATCH — toggle force-lock or force-unlock */
 export async function PATCH(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isAdminAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

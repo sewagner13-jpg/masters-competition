@@ -18,6 +18,7 @@ export default function RootLayout({
     { href: "/leaderboard", label: "Leaderboard" },
     { href: "/rules", label: "Rules" },
     { href: "/scoring", label: "Scoring" },
+    { href: "/admin", label: "Admin" },
   ];
 
   return (

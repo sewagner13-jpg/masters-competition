@@ -75,7 +75,7 @@ function statusBadge(status: string) {
 // ─── Main Admin Page ──────────────────────────────────────────────────────────
 
 export default function AdminPage() {
-  const [secret, setSecret] = useState("");
+  const [masterCode, setMasterCode] = useState("");
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState("");
 
@@ -94,7 +94,7 @@ export default function AdminPage() {
   const [teamMsg, setTeamMsg] = useState<string | null>(null);
 
   const hdrs = (extra?: Record<string, string>) => ({
-    "x-admin-secret": secret,
+    "x-master-code": masterCode.trim(),
     "Content-Type": "application/json",
     ...extra,
   });
@@ -116,12 +116,12 @@ export default function AdminPage() {
       setSyncRuns(runsData.runs ?? []);
       setSundayTeams(teamsData.teams ?? []);
     } finally { setLoading(false); }
-  }, [secret]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [masterCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleAuth() {
     setAuthError("");
-    const res = await fetch("/api/admin/settings", { headers: { "x-admin-secret": secret } });
-    if (res.status === 401) { setAuthError("Incorrect admin secret."); return; }
+    const res = await fetch("/api/admin/settings", { headers: { "x-master-code": masterCode.trim() } });
+    if (res.status === 401) { setAuthError("Incorrect master code."); return; }
     setAuthed(true);
   }
 
@@ -171,12 +171,12 @@ export default function AdminPage() {
     else setTeamMsg(`Error: ${d.error}`);
   }
 
-  // Post-lock roster edit (commissioner)
+  // Post-lock roster edit (admin)
   async function handleCommissionerRosterEdit(entryId: string, newPlayerIds: string[]) {
     const res = await fetch(`/api/entries/${entryId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: "1110", playerIds: newPlayerIds }),
+      body: JSON.stringify({ code: masterCode.trim(), playerIds: newPlayerIds }),
     });
     const d = await res.json();
     if (!res.ok) alert(`Error: ${d.error}`);
@@ -187,7 +187,7 @@ export default function AdminPage() {
     return (
       <div className="max-w-sm mx-auto px-4 py-20">
         <h1 className="text-xl font-serif font-bold text-masters-green mb-6 text-center">Admin Panel</h1>
-        <input type="password" placeholder="Admin secret" value={secret} onChange={(e) => setSecret(e.target.value)}
+        <input type="password" placeholder="Master code" value={masterCode} onChange={(e) => setMasterCode(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAuth()}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3 text-sm focus:outline-none focus:ring-2 focus:ring-masters-green" />
         {authError && <p className="text-red-600 text-sm mb-3">{authError}</p>}
@@ -478,7 +478,7 @@ function CommissionerEditModal({
   onClose: () => void;
   onSave: (entryId: string, playerIds: string[]) => Promise<void>;
 }) {
-  const [note] = useState("Roster edit functionality is available via the Edit page using the commissioner code (1110).");
+  const [note] = useState("Roster edit functionality is available via the Edit page using the master code.");
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
