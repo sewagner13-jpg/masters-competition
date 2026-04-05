@@ -149,9 +149,6 @@ function LeaderboardContent() {
         return (b[key] as number) - (a[key] as number);
       })
     : [];
-  const preLockEntries = data
-    ? [...data.leaderboard].sort((a, b) => a.userName.localeCompare(b.userName))
-    : [];
 
   const todayRound = data?.activeRound ?? null;
   const todayLabel = todayRound ? ROUND_LABELS[todayRound] : "Today";
@@ -179,17 +176,17 @@ function LeaderboardContent() {
       {/* Lock status banner */}
       {data && !data.isLocked && (
         <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-800 text-center">
-          🔓 Contest is open · Lineups are hidden until lock · Entries close <strong>Thu Apr 9 at 7:45 AM ET</strong>
+          🔓 Contest is open · Entries can still be edited until <strong>Thu Apr 9 at 7:45 AM ET</strong>
         </div>
       )}
       {data?.isLocked && (
         <div className="mb-4 bg-masters-green/10 border border-masters-green/30 rounded-lg px-4 py-2 text-sm text-masters-green text-center">
-          🔒 Contest is locked · All lineups are now visible
+          🔒 Contest is locked · Lineups are final
         </div>
       )}
 
       {/* Tab bar */}
-      {data?.isLocked && (
+      {data && (
         <div className="flex gap-2 mb-5 border-b border-gray-200">
           {[
             { key: "today" as ViewTab, label: todayLabel ? `${todayLabel} (Today)` : "Today's Round" },
@@ -213,8 +210,7 @@ function LeaderboardContent() {
       {loading && <div className="text-center text-masters-green animate-pulse py-12">Loading...</div>}
       {error && <div className="text-center text-red-600 py-12">{error}</div>}
 
-      {/* Pre-lock message */}
-      {data && !data.isLocked && data.leaderboard.length === 0 && (
+      {data && data.leaderboard.length === 0 && (
         <div className="text-center text-gray-400 py-16">
           <p className="text-4xl mb-3">⛳</p>
           <p className="font-medium">No entries yet. Be the first!</p>
@@ -222,46 +218,7 @@ function LeaderboardContent() {
         </div>
       )}
 
-      {data && !data.isLocked && data.leaderboard.length > 0 && (
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 text-center">
-            <p className="text-3xl mb-2">🔐</p>
-            <p className="font-semibold text-lg text-gray-800">
-              {data.leaderboard.length} {data.leaderboard.length === 1 ? "entry" : "entries"} submitted
-            </p>
-            <p className="text-sm mt-1 text-gray-500">
-              Entry names are visible now. Lineups stay hidden until the contest locks on Thu Apr 9 at 7:45 AM ET.
-            </p>
-          </div>
-
-          <div className="grid gap-3 p-4 sm:grid-cols-2">
-            {preLockEntries.map((entry, idx) => (
-              <div
-                key={entry.entryId}
-                className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3"
-              >
-                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-masters-green/10 text-sm font-bold text-masters-green">
-                  {idx + 1}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-gray-900">{entry.userName}</p>
-                  <p className="text-xs text-gray-500">Lineup submitted • players hidden until lock</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Leaderboard table — only shown after lock */}
-      {data?.isLocked && sortedEntries.length === 0 && (
-        <div className="text-center text-gray-400 py-16">
-          <p className="text-4xl mb-3">⛳</p>
-          <p className="font-medium">No entries to display.</p>
-        </div>
-      )}
-
-      {data?.isLocked && sortedEntries.length > 0 && (
+      {data && sortedEntries.length > 0 && (
         <div className="flex flex-col gap-3">
           {sortedEntries.map((entry, idx) => {
             const roundScore = todayRound

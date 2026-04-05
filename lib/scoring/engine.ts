@@ -38,7 +38,6 @@ export interface EntryScoreResult {
   sundayBonusPoints: number;
   scoreOverall: number;
   players: PlayerScoreResult[];
-  // Shown after lock only
   sundayRepName: string | null;
   sundayTeamName: string | null;
   publicMessage: string | null;
@@ -118,9 +117,9 @@ export function getActiveRound(): 1 | 2 | 3 | 4 | null {
 
 /**
  * Get full leaderboard data.
- * isLocked controls whether lineup details are visible.
+ * Lock state is still returned separately for UI messaging and contest controls.
  */
-export async function getLeaderboard(isLocked: boolean): Promise<EntryScoreResult[]> {
+export async function getLeaderboard(_isLocked: boolean): Promise<EntryScoreResult[]> {
   const entries = await prisma.entry.findMany({
     where: { status: "active" },
     orderBy: { score: "desc" }, // Higher = better (fantasy points)
@@ -149,24 +148,21 @@ export async function getLeaderboard(isLocked: boolean): Promise<EntryScoreResul
     scoreR4: entry.scoreR4,
     sundayBonusPoints: entry.sundayBonusPoints,
     scoreOverall: entry.score,
-    // Only expose lineup details after lock
-    players: isLocked
-      ? entry.players.map((ep) => {
-          const stat = ep.player.stats[0];
-          return {
-            playerId: ep.player.id,
-            playerName: ep.player.name,
-            position: stat?.position ?? null,
-            thru: stat?.thru ?? null,
-            r1Pts: stat?.r1Pts ?? 0,
-            r2Pts: stat?.r2Pts ?? 0,
-            r3Pts: stat?.r3Pts ?? 0,
-            r4Pts: stat?.r4Pts ?? 0,
-          };
-        })
-      : [],
-    sundayRepName: isLocked ? (entry.sundayRepName ?? null) : null,
-    sundayTeamName: isLocked ? (entry.sundayTeamName ?? null) : null,
-    publicMessage: isLocked ? (entry.publicMessage ?? null) : null,
+    players: entry.players.map((ep) => {
+      const stat = ep.player.stats[0];
+      return {
+        playerId: ep.player.id,
+        playerName: ep.player.name,
+        position: stat?.position ?? null,
+        thru: stat?.thru ?? null,
+        r1Pts: stat?.r1Pts ?? 0,
+        r2Pts: stat?.r2Pts ?? 0,
+        r3Pts: stat?.r3Pts ?? 0,
+        r4Pts: stat?.r4Pts ?? 0,
+      };
+    }),
+    sundayRepName: entry.sundayRepName ?? null,
+    sundayTeamName: entry.sundayTeamName ?? null,
+    publicMessage: entry.publicMessage ?? null,
   }));
 }
