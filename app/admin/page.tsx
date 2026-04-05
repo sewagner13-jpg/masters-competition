@@ -1,6 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { PlayerTable, type Player } from "@/components/PlayerTable";
+import { RosterBuilder } from "@/components/RosterBuilder";
+import { SalaryTracker } from "@/components/SalaryTracker";
+import { ROSTER_SIZE, SALARY_CAP } from "@/lib/constants";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -80,6 +84,7 @@ export default function AdminPage() {
   const [authError, setAuthError] = useState("");
 
   const [entries, setEntries] = useState<EntryAdmin[]>([]);
+  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [sundayTeams, setSundayTeams] = useState<SundayTeam[]>([]);
   const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
   const [lockState, setLockState] = useState<LockState | null>(null);
@@ -102,16 +107,19 @@ export default function AdminPage() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [settingsRes, runsRes, teamsRes] = await Promise.all([
+      const [settingsRes, runsRes, teamsRes, playersRes] = await Promise.all([
         fetch("/api/admin/settings", { headers: hdrs() }),
         fetch("/api/admin/sync-runs", { headers: hdrs() }),
         fetch("/api/admin/sunday-team", { headers: hdrs() }),
+        fetch("/api/players"),
       ]);
       if (settingsRes.status === 401) { setAuthed(false); setAuthError("Session expired."); return; }
       const settingsData = await settingsRes.json();
       const runsData = await runsRes.json();
       const teamsData = await teamsRes.json();
+      const playersData = await playersRes.json();
       setEntries(settingsData.entries ?? []);
+      setAllPlayers(playersData.players ?? []);
       setLockState(settingsData.lockState ?? null);
       setSyncRuns(runsData.runs ?? []);
       setSundayTeams(teamsData.teams ?? []);
@@ -179,8 +187,9 @@ export default function AdminPage() {
       body: JSON.stringify({ code: masterCode.trim(), playerIds: newPlayerIds }),
     });
     const d = await res.json();
-    if (!res.ok) alert(`Error: ${d.error}`);
-    else { setEditingEntry(null); loadAll(); }
+    if (!res.ok) return d.error ?? "Failed to save lineup.";
+    await loadAll();
+    return null;
   }
 
   if (!authed) {
@@ -373,7 +382,7 @@ export default function AdminPage() {
 
       <section className="bg-white border border-gray-200 rounded-xl p-5 mt-6 shadow-sm">
         <h2 className="font-bold text-gray-800 mb-1">Protected Lineups</h2>
-        <p className="text-xs text-gray-500 mb-4">Visible only after entering the admin secret.</p>
+        <p className="text-xs text-gray-500 mb-4">Visible only after entering the master code. Edit any lineup here if you need to make a fair commissioner change.</p>
         {entries.length === 0 ? (
           <p className="text-sm text-gray-400">No entries yet.</p>
         ) : (
@@ -384,9 +393,17 @@ export default function AdminPage() {
                 <div key={entry.id} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <h3 className="font-semibold text-gray-900">{entry.userName}</h3>
-                    <span className="text-xs font-mono text-gray-500">
-                      ${entry.players.reduce((sum, ep) => sum + ep.player.salary, 0).toLocaleString()}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-mono text-gray-500">
+                        ${entry.players.reduce((sum, ep) => sum + ep.player.salary, 0).toLocaleString()}
+                      </span>
+                      <button
+                        onClick={() => setEditingEntry(entry)}
+                        className="rounded-lg bg-masters-green px-3 py-1.5 text-xs font-bold text-white hover:bg-green-800"
+                      >
+                        Edit lineup
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-1">
                     {entry.players.map((ep) => (
@@ -405,6 +422,7 @@ export default function AdminPage() {
       {editingEntry && (
         <CommissionerEditModal
           entry={editingEntry}
+          allPlayers={allPlayers}
           onClose={() => setEditingEntry(null)}
           onSave={handleCommissionerRosterEdit}
         />
@@ -471,27 +489,121 @@ function SundayRow({
 
 function CommissionerEditModal({
   entry,
+  allPlayers,
   onClose,
   onSave,
 }: {
   entry: EntryAdmin;
+  allPlayers: Player[];
   onClose: () => void;
-  onSave: (entryId: string, playerIds: string[]) => Promise<void>;
+  onSave: (entryId: string, playerIds: string[]) => Promise<string | null>;
 }) {
-  const [note] = useState("Roster edit functionality is available via the Edit page using the master code.");
+  const [selectedMap, setSelectedMap] = useState<Map<string, Player>>(new Map());
+  const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const next = new Map<string, Player>();
+    for (const ep of entry.players) {
+      next.set(ep.player.id, {
+        id: ep.player.id,
+        name: ep.player.name,
+        salary: ep.player.salary,
+        isActive: true,
+      });
+    }
+    setSelectedMap(next);
+    setSearch("");
+    setSaveError(null);
+  }, [entry]);
+
+  const selectedPlayers = Array.from(selectedMap.values());
+  const selectedIds = new Set(selectedMap.keys());
+  const totalSalary = selectedPlayers.reduce((sum, player) => sum + player.salary, 0);
+  const isValid = selectedPlayers.length === ROSTER_SIZE && totalSalary <= SALARY_CAP;
+
+  function togglePlayer(player: Player) {
+    setSelectedMap((prev) => {
+      const next = new Map(prev);
+      if (next.has(player.id)) next.delete(player.id);
+      else next.set(player.id, player);
+      return next;
+    });
+  }
+
+  function removePlayer(player: Player) {
+    setSelectedMap((prev) => {
+      const next = new Map(prev);
+      next.delete(player.id);
+      return next;
+    });
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveError(null);
+    const error = await onSave(entry.id, Array.from(selectedMap.keys()));
+    if (error) {
+      setSaveError(error);
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
+    onClose();
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-bold text-masters-green mb-3">Edit Roster: {entry.userName}</h2>
-        <p className="text-sm text-gray-600 mb-4">{note}</p>
-        <a
-          href={`/edit/${entry.id}`}
-          className="block w-full bg-masters-green text-white text-center font-bold py-2 rounded-lg hover:bg-green-800"
-        >
-          Open Edit Page →
-        </a>
-        <button onClick={onClose} className="mt-2 w-full text-sm text-gray-500 underline">Cancel</button>
+      <div className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-masters-green">Edit Lineup: {entry.userName}</h2>
+            <p className="mt-1 text-sm text-gray-500">Use this only when you need to make a fair admin correction.</p>
+          </div>
+          <button onClick={onClose} className="text-2xl leading-none text-gray-400 hover:text-gray-600">×</button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <PlayerTable
+              players={allPlayers}
+              selectedIds={selectedIds}
+              totalSalary={totalSalary}
+              onToggle={togglePlayer}
+              search={search}
+              onSearchChange={setSearch}
+            />
+          </div>
+
+          <div className="flex flex-col gap-4 lg:sticky lg:top-4 self-start">
+            <SalaryTracker totalSalary={totalSalary} selectedCount={selectedPlayers.length} />
+
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-gray-700">
+                Roster ({selectedPlayers.length}/{ROSTER_SIZE})
+              </h3>
+              <RosterBuilder selectedPlayers={selectedPlayers} onRemove={removePlayer} />
+            </div>
+
+            {saveError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {saveError}
+              </div>
+            )}
+
+            <button
+              onClick={handleSave}
+              disabled={!isValid || saving}
+              className="w-full rounded-lg bg-masters-green py-3 font-bold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {saving ? "Saving..." : "Save Admin Changes"}
+            </button>
+            <button onClick={onClose} className="text-sm text-gray-500 underline">
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
