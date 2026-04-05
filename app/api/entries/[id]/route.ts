@@ -180,3 +180,54 @@ export async function PUT(
     return NextResponse.json({ error: "Failed to update entry." }, { status: 500 });
   }
 }
+
+/** DELETE — remove an existing entry (requires personal code or commissioner master code) */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  try {
+    const body = await req.json();
+    const code = String(body?.code ?? "").trim();
+
+    if (!code) {
+      return NextResponse.json({ error: "Code is required" }, { status: 400 });
+    }
+
+    const entry = await prisma.entry.findUnique({ where: { id } });
+
+    if (!entry) {
+      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    }
+
+    const isCommissioner = code === COMMISSIONER_CODE;
+
+    if (!isCommissioner) {
+      if (!entry.editCodeHash) {
+        return NextResponse.json(
+          { error: "This entry has no personal code set. Contact the commissioner to remove it." },
+          { status: 403 }
+        );
+      }
+      if (!verifyCode(code, entry.editCodeHash)) {
+        return NextResponse.json({ error: "Incorrect personal code." }, { status: 403 });
+      }
+    }
+
+    const settings = await prisma.contestSettings.findUnique({ where: { id: "main" } });
+    if (!isCommissioner && isContestLocked(settings)) {
+      return NextResponse.json(
+        { error: "The contest is locked. Entries can no longer be removed." },
+        { status: 403 }
+      );
+    }
+
+    await prisma.entry.delete({ where: { id } });
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[api/entries/[id] DELETE] Error:", err);
+    return NextResponse.json({ error: "Failed to delete entry." }, { status: 500 });
+  }
+}
