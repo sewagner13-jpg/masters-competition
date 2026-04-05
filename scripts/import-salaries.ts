@@ -16,6 +16,8 @@ import * as XLSX from "xlsx";
 import { PrismaClient } from "@prisma/client";
 import path from "path";
 import fs from "fs";
+import type { PlayerPoolEntry } from "../lib/playerPool";
+import { replacePlayerPool } from "../lib/playerPoolSync";
 
 const prisma = new PrismaClient();
 
@@ -88,7 +90,7 @@ async function importSalaries(filePath: string) {
   );
   console.log(`Found ${rows.length} rows.`);
 
-  let imported = 0;
+  const importedPlayers: PlayerPoolEntry[] = [];
   let skipped = 0;
 
   for (let i = 0; i < rows.length; i++) {
@@ -118,18 +120,21 @@ async function importSalaries(filePath: string) {
       continue;
     }
 
-    // Upsert by name (update salary if player already exists)
-    await prisma.player.upsert({
-      where: { id: (await prisma.player.findFirst({ where: { name } }))?.id ?? "" },
-      update: { salary, sourceRow: i + 2, isActive: true, updatedAt: new Date() },
-      create: { name, salary, sourceRow: i + 2, isActive: true },
-    });
-
     console.log(`  [${i + 2}] ${name} — $${salary.toLocaleString()}`);
-    imported++;
+    importedPlayers.push({ name, salary });
   }
 
-  console.log(`\nDone. Imported: ${imported}, Skipped: ${skipped}`);
+  if (importedPlayers.length === 0) {
+    throw new Error("No valid player rows found in the spreadsheet.");
+  }
+
+  const { created, updated, deactivated } = await replacePlayerPool(prisma, importedPlayers, {
+    sourceRowStart: 2,
+  });
+
+  console.log(
+    `\nDone. Imported: ${importedPlayers.length}, Skipped: ${skipped}, Created: ${created}, Updated: ${updated}, Deactivated: ${deactivated}`
+  );
 }
 
 const filePath = process.argv[2];

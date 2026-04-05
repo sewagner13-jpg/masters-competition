@@ -13,30 +13,34 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const navLinks = [
+    { href: "/play", label: "Build Lineup" },
+    { href: "/leaderboard", label: "Leaderboard" },
+    { href: "/rules", label: "Rules" },
+    { href: "/scoring", label: "Scoring" },
+  ];
+
   return (
     <html lang="en">
       <body className="min-h-screen flex flex-col">
         <header className="bg-masters-green text-white shadow-md">
-          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Link
               href="/"
               className="text-lg font-serif font-bold tracking-wide hover:text-masters-gold transition-colors"
             >
               ⛳ {APP_NAME}
             </Link>
-            <nav className="flex gap-4 text-sm font-medium">
-              <Link
-                href="/play"
-                className="hover:text-masters-gold transition-colors"
-              >
-                Build Lineup
-              </Link>
-              <Link
-                href="/leaderboard"
-                className="hover:text-masters-gold transition-colors"
-              >
-                Leaderboard
-              </Link>
+            <nav className="flex flex-wrap items-center gap-4 text-sm font-medium sm:justify-end">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="hover:text-masters-gold transition-colors"
+                >
+                  {link.label}
+                </Link>
+              ))}
             </nav>
           </div>
         </header>
