@@ -4,6 +4,7 @@ import { editEntrySchema, validateSalaryCap } from "@/lib/validation";
 import { SALARY_CAP, COMMISSIONER_CODE } from "@/lib/constants";
 import { verifyCode, hashCode } from "@/lib/editCode";
 import { isContestLocked } from "@/lib/lock";
+import { computeAllEntryScores } from "@/lib/scoring/engine";
 
 export const dynamic = "force-dynamic";
 
@@ -165,6 +166,7 @@ export async function PUT(
         }),
         prisma.entry.update({ where: { id }, data: updateData }),
       ]);
+      await computeAllEntryScores();
 
       return NextResponse.json({ ok: true });
     }

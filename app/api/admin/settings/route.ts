@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { getLockState } from "@/lib/lock";
 import { LOCK_DEADLINE } from "@/lib/constants";
 import { isAdminAuthorized } from "@/lib/adminAuth";
+import { computeAllEntryScores } from "@/lib/scoring/engine";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +84,7 @@ export async function POST(req: NextRequest) {
     if (isPlayingSunday !== undefined) updateData.isPlayingSunday = Boolean(isPlayingSunday);
 
     await prisma.entry.update({ where: { id: entryId }, data: updateData });
+    await computeAllEntryScores();
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[api/admin/settings POST] Error:", err);

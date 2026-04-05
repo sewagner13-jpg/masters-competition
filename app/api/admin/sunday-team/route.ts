@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { holeScoreToPoints } from "@/lib/scoring/config";
 import { isAdminAuthorized } from "@/lib/adminAuth";
+import { computeAllEntryScores } from "@/lib/scoring/engine";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
       create: { teamName, bonusPoints, holeScores: scoredHoles },
     });
 
+    await computeAllEntryScores();
     return NextResponse.json({ team });
   } catch (err) {
     console.error("[api/admin/sunday-team POST] Error:", err);

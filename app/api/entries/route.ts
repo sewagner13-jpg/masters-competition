@@ -4,6 +4,7 @@ import { submitEntrySchema, validateSalaryCap } from "@/lib/validation";
 import { SALARY_CAP } from "@/lib/constants";
 import { hashCode } from "@/lib/editCode";
 import { isContestLocked } from "@/lib/lock";
+import { computeAllEntryScores } from "@/lib/scoring/engine";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +92,8 @@ export async function POST(req: NextRequest) {
 
       return newEntry;
     });
+
+    await computeAllEntryScores();
 
     return NextResponse.json({ entryId: entry.id }, { status: 201 });
   } catch (err) {
