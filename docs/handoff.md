@@ -1,129 +1,159 @@
 # Handoff Document — Sunday Church Masters Competition
 
 **Last updated**: 2026-04-05
-**Status**: Phase 1 complete — full working app foundation built
+**Status**: Phase 2 complete — all contest rules, locking, scoring, commissioner controls, and entry editing implemented
+
+---
 
 ## What Is Working
 
-- ✅ Next.js 15 app scaffolded with TypeScript, Tailwind CSS, App Router
-- ✅ Prisma schema: Player, Entry, EntryPlayer, PlayerStat, SyncRun
-- ✅ Seed script (`prisma/seed.ts`) with 36-player 2026 Masters pool
-- ✅ Spreadsheet import script (`scripts/import-salaries.ts`) — accepts xlsx
-- ✅ `/play` — Full lineup builder with:
-  - Player pool loaded from DB
-  - Real-time salary cap tracker ($50,000)
-  - 6-player roster selection with duplicate prevention
-  - Search/filter players by name
-  - Sticky sidebar on desktop
-  - Submit button disabled until lineup is valid
-- ✅ `POST /api/entries` — server-side validation, cap enforcement, DB persistence
-- ✅ `/leaderboard` — public scoreboard with auto-refresh every 60 seconds
-- ✅ `/admin` — password-protected panel with manual sync, sync run history, entry viewer
-- ✅ Stats provider abstraction (`lib/stats/provider.ts`) — MockStatsProvider by default
-- ✅ Scoring engine (`lib/scoring/engine.ts`) — decoupled from UI, config-driven
-- ✅ Sync service (`lib/stats/sync.ts`) — logs every run to DB, ET window guard
-- ✅ Netlify scheduled function (`netlify/functions/sync-stats.mts`) — every 15 min
-- ✅ `netlify.toml` with `@netlify/plugin-nextjs`
-- ✅ `.env.example` with all required variables documented
+### Phase 1 (foundation)
+- ✅ Next.js 16 + TypeScript + Tailwind + Prisma + Neon PostgreSQL
+- ✅ Player pool (37 players seeded, spreadsheet import script ready)
+- ✅ `/play` — lineup builder with $50k salary cap, 6-player validation
+- ✅ Netlify deployment at https://masters-competition-sw.netlify.app
 
-## What Is Incomplete
+### Phase 2 (contest rules — just completed)
+- ✅ **One entry per person** — `userName` is `@unique`, duplicate name returns 409
+- ✅ **Contest lock** — auto-locks Thu Apr 9 @ 7:45 AM ET; commissioner can force-lock or force-unlock via admin panel
+- ✅ **Personal edit code** — optional at submission, SHA-256 hashed in DB, encouraged in UI
+- ✅ **Public message** — optional, shown to everyone on leaderboard after lock
+- ✅ **Lineup visibility** — hidden before lock, full detail visible after lock
+- ✅ **Entry edit page** (`/edit/[id]`) — users enter personal code to edit before lock; locked after deadline
+- ✅ **Commissioner override** — master code `1110` bypasses lock and code checks at any time
+- ✅ **Scoring engine** — 5 buckets: R1/R2/R3/R4 (daily) + overall (R1+R2+R3+R4+SundayBonus)
+- ✅ **Real hole scoring config** — double eagle=20, eagle=8, birdie=3, par=0.5, bogey=-0.5, double bogey=-1
+- ✅ **Sunday team scores** — commissioner enters hole-by-hole scores per team; bonus applies to overall only
+- ✅ **Sunday assignments** — commissioner assigns rep name + team name + isPlayingSunday per entry in admin panel
+- ✅ **Leaderboard tabs** — Today's Round (default) and Overall; entry detail modal shows golfers/rep/team/message
+- ✅ **Commissioner panel** (`/admin`) — lock controls, Sunday assignments, team score entry, sync runs, score table
+- ✅ **Prize display** — not yet built (percentages agreed, no UI yet — see below)
 
-- ❌ **Real stats provider** — currently uses mock (returns empty data)
-- ❌ **Final scoring rules** — placeholder is `totalToPar` directly; custom rules TBD
-- ❌ **Spreadsheet file** — `/mnt/data/2026_masters_salary_list.xlsx` not present locally; seed uses hardcoded players
-- ❌ **Netlify `@netlify/functions` package** — may need `npm install @netlify/functions` for TypeScript types in scheduled function
+---
 
-## Next Exact Steps (Priority Order)
+## What Is Incomplete / Next Steps
 
-1. **Set up PostgreSQL database** (local or Neon/Supabase)
-   ```bash
-   cp .env.example .env.local
-   # set DATABASE_URL
-   npm run db:generate
-   npm run db:push
-   npm run db:seed
-   ```
+### 1. Real stats provider (highest priority before tournament starts)
+- Currently `MASTERS_STATS_PROVIDER=mock` → all scores show 0
+- Need: implement a real provider in `lib/stats/providers/`
+- Per-round fantasy points (`r1Pts`–`r4Pts`) on `PlayerStat` must be populated
+- See `docs/stats-provider-plan.md`
 
-2. **Run the app locally**
-   ```bash
-   npm run dev
-   # Visit http://localhost:3000
-   ```
+### 2. Actual salary spreadsheet import
+- Run when Sean provides the file:
+  ```bash
+  DATABASE_URL="..." npx tsx scripts/import-salaries.ts path/to/2026_masters_salary_list.xlsx
+  ```
 
-3. **Import real salary spreadsheet** (when available)
-   ```bash
-   npm run import:salaries path/to/2026_masters_salary_list.xlsx
-   ```
+### 3. Prize display on leaderboard (optional before tournament)
+Agreed prize structure (all based on $50 buy-in × N entries):
+- Daily (4 days × 10% of pot): 1st = 7.5%, 2nd = 2.5%
+- Overall: 1st = 30%, 2nd = 15%, 3rd = 10%
+- Last place: 5%
+- Ties: split combined prize money evenly, no tiebreakers
 
-4. **Build a real stats provider** — see `docs/stats-provider-plan.md`
-   - Create `lib/stats/providers/espn-provider.ts` (or similar)
-   - Implement `StatsProvider` interface
-   - Set `MASTERS_STATS_PROVIDER=espn` in env
+### 4. GitHub Actions auto-deploy
+- Workflow file is at `.github/workflows/deploy.yml` locally but can't be pushed (token needs `workflow` scope)
+- Fix: go to github.com/settings/tokens → add `workflow` scope → I can push the file, OR use Netlify UI to link GitHub repo directly
 
-5. **Finalize scoring rules** — edit `lib/scoring/config.ts`
-   - Update `computePlayerScore()` with actual game format
-   - Trigger manual sync from `/admin` to recompute scores
+---
 
-6. **Deploy to Netlify** — see `docs/netlify-deploy.md`
+## Database Changes (Phase 2)
 
-## Commands to Run Locally
+### Entry model additions
+| Field | Type | Purpose |
+|---|---|---|
+| `userName` | `String @unique` | One entry per name |
+| `updatedAt` | `DateTime` | Track edits |
+| `editCodeHash` | `String?` | SHA-256 of personal code |
+| `publicMessage` | `String?` | Shown after lock |
+| `sundayRepName` | `String?` | Commissioner-assigned |
+| `sundayTeamName` | `String?` | Commissioner-assigned |
+| `isPlayingSunday` | `Boolean` | Flag for Sunday outing |
+| `scoreR1–R4` | `Float` | Per-round fantasy pts |
+| `sundayBonusPoints` | `Float` | From SundayTeam |
+| `score` | `Float` | Overall (R1+R2+R3+R4+bonus) |
+
+### New models
+- **`ContestSettings`** — singleton `id="main"`, `isForceUnlocked`, `lockedAt`
+- **`SundayTeam`** — `teamName @unique`, `bonusPoints`, `holeScores` (JSON)
+
+### PlayerStat additions
+- `r1Pts`, `r2Pts`, `r3Pts`, `r4Pts` — per-round fantasy points (null until stats provider populates)
+
+---
+
+## Screens Updated
+
+| Page | What Changed |
+|---|---|
+| `/play` | "Entry Name" label, personal code field (encouraged), public message field, locked redirect |
+| `/leaderboard` | Today/Overall tabs, pre-lock entry count (no lineups shown), entry detail modal, lock banner |
+| `/edit/[id]` | **New** — code-auth edit page, locked redirect |
+| `/admin` | Lock controls, Sunday assignment table, Sunday team score entry, all-entries score table |
+
+---
+
+## Commissioner Operations
+
+### Locking
+- Auto-locks at `2026-04-09T07:45:00-04:00`
+- Manual force-lock: Admin → "Force Lock Now"
+- Manual unlock: Admin → "Force Unlock"
+- Master code for direct entry edits: `1110` (set as `COMMISSIONER_CODE` in env)
+
+### Sunday assignments
+1. Go to `/admin` → Sunday Assignments section
+2. For each entry, fill in Representative name, Team name, check/uncheck Playing
+3. Click Save per row
+
+### Sunday team scores
+1. Admin → Sunday Team Scores section
+2. Enter team name + hole-by-hole scores (score to par: -1=birdie, 0=par, 1=bogey, etc.)
+3. Click Save Team Scores → bonus points computed automatically
+
+### Post-lock roster edit (commissioner)
+1. Go to `/edit/[entryId]`
+2. Enter master code `1110`
+3. Edit freely — lock check is bypassed for commissioner
+
+---
+
+## Commands
 
 ```bash
-# Install deps
-npm install
-
-# DB setup
-npm run db:generate
-npm run db:push
-npm run db:seed
-
-# Import spreadsheet (optional)
-npm run import:salaries /path/to/spreadsheet.xlsx
-
-# Dev server
+# Local dev
 npm run dev
 
-# Build (test before deploy)
-npm run build
+# DB push (after schema change)
+DATABASE_URL="..." npx prisma db push
+
+# Import spreadsheet
+npm run import:salaries path/to/spreadsheet.xlsx
+
+# Deploy to Netlify
+NETLIFY_AUTH_TOKEN=... netlify deploy --prod --site b6a271f5-4da6-48c5-9afc-d0cf2761fa78 --dir .next
 ```
 
-## Database Migration Status
+## Environment Variables (all set in Netlify)
 
-- Schema created: Yes (`prisma/schema.prisma`)
-- Migrations run: **No** — only `db:push` used (schema-first, dev-only)
-- For production, consider switching to `prisma migrate dev` and committing migrations
-
-## Spreadsheet Usage
-
-- **Import script**: `scripts/import-salaries.ts` — run with `npm run import:salaries <path>`
-- **Seed script**: `prisma/seed.ts` — hardcoded 36-player pool as fallback
-- **Column detection**: Flexible — looks for Name/Player/Golfer and Salary/Sal/Amount columns
-- **Upsert logic**: Matches by player name; safe to re-run
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | Neon `masters-competition` project |
+| `MASTERS_STATS_PROVIDER` | `mock` (change when real provider ready) |
+| `SYNC_ENABLED` | `true` |
+| `SYNC_START_HOUR_ET` | `6` |
+| `SYNC_END_HOUR_ET` | `21` |
+| `ADMIN_SECRET` | Set in Netlify dashboard |
+| `COMMISSIONER_CODE` | `1110` |
+| `NEXT_PUBLIC_APP_URL` | `https://masters-competition-sw.netlify.app` |
 
 ## Files Safe to Edit Next
 
 | File | What to change |
 |---|---|
-| `lib/scoring/config.ts` | Custom scoring rules |
-| `lib/stats/provider.ts` | Add real provider case to switch |
-| `lib/stats/providers/` | Create new provider implementations here |
-| `prisma/seed.ts` | Update player list / salaries |
-| `app/page.tsx` | Landing page copy |
-| `tailwind.config.ts` | Color scheme tweaks |
-
-## Known Issues
-
-1. **Netlify scheduled function types**: May need `npm install -D @netlify/functions` for TypeScript types
-2. **ESM imports in scheduled function**: The function imports from `../../lib/stats/sync.js` — Netlify esbuild handles this but may need `.js` extension adjustments
-3. **Admin page headers in useCallback**: The `headers` object inside `useCallback` creates a lint warning; works correctly at runtime
-4. **No rate limiting on entry submission**: A user can submit multiple lineups. If you want to prevent this, add IP-based or name-based deduplication in `POST /api/entries`
-
-## Architecture Summary
-
-- `app/` — Next.js pages and API routes
-- `lib/` — All business logic (scoring, sync, validation, constants)
-- `components/` — Client UI components
-- `netlify/functions/` — Scheduled sync function
-- `prisma/` — Schema and seed
-- `scripts/` — One-time tools (import)
-- `docs/` — This folder
+| `lib/scoring/config.ts` | Scoring rules already correct — only change if rules update |
+| `lib/stats/provider.ts` | Add real provider switch |
+| `lib/stats/providers/` | Create real provider implementation here |
+| `prisma/seed.ts` | Will be replaced by spreadsheet import |
+| `app/leaderboard/page.tsx` | Add prize display section when ready |
