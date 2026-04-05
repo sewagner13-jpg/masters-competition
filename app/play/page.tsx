@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Player, PlayerTable } from "@/components/PlayerTable";
 import { RosterBuilder } from "@/components/RosterBuilder";
 import { SalaryTracker } from "@/components/SalaryTracker";
-import { ROSTER_SIZE, SALARY_CAP, APP_NAME } from "@/lib/constants";
+import { ROSTER_SIZE, SALARY_CAP } from "@/lib/constants";
 
 export default function PlayPage() {
   const router = useRouter();
@@ -13,19 +13,25 @@ export default function PlayPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedMap, setSelectedMap] = useState<Map<string, Player>>(new Map());
   const [userName, setUserName] = useState("");
+  const [editCode, setEditCode] = useState("");
+  const [publicMessage, setPublicMessage] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isLocked, setIsLocked] = useState(false);
 
-  // Load players
   useEffect(() => {
-    fetch("/api/players")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.error) throw new Error(data.error);
-        setPlayers(data.players);
+    // Check lock state + load players in parallel
+    Promise.all([
+      fetch("/api/players").then((r) => r.json()),
+      fetch("/api/leaderboard").then((r) => r.json()),
+    ])
+      .then(([playerData, lbData]) => {
+        if (playerData.error) throw new Error(playerData.error);
+        setPlayers(playerData.players);
+        setIsLocked(lbData.isLocked ?? false);
       })
       .catch((e) => setLoadError(e.message))
       .finally(() => setLoading(false));
@@ -38,11 +44,8 @@ export default function PlayPage() {
   const togglePlayer = useCallback((player: Player) => {
     setSelectedMap((prev) => {
       const next = new Map(prev);
-      if (next.has(player.id)) {
-        next.delete(player.id);
-      } else {
-        next.set(player.id, player);
-      }
+      if (next.has(player.id)) next.delete(player.id);
+      else next.set(player.id, player);
       return next;
     });
   }, []);
@@ -63,7 +66,6 @@ export default function PlayPage() {
   async function handleSubmit() {
     setError(null);
     setSubmitting(true);
-
     try {
       const res = await fetch("/api/entries", {
         method: "POST",
@@ -71,17 +73,18 @@ export default function PlayPage() {
         body: JSON.stringify({
           userName: userName.trim(),
           playerIds: Array.from(selectedMap.keys()),
+          editCode: editCode.trim() || undefined,
+          publicMessage: publicMessage.trim() || undefined,
         }),
       });
-
       const data = await res.json();
-
       if (!res.ok) {
         setError(data.error ?? "Something went wrong. Please try again.");
         return;
       }
-
-      router.push(`/leaderboard?submitted=1&name=${encodeURIComponent(userName.trim())}`);
+      router.push(
+        `/leaderboard?submitted=1&name=${encodeURIComponent(userName.trim())}`
+      );
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -92,9 +95,7 @@ export default function PlayPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-64">
-        <div className="text-masters-green font-medium animate-pulse">
-          Loading player pool...
-        </div>
+        <div className="text-masters-green font-medium animate-pulse">Loading player pool...</div>
       </div>
     );
   }
@@ -103,9 +104,26 @@ export default function PlayPage() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center">
         <p className="text-red-600 font-medium">{loadError}</p>
-        <p className="text-sm text-gray-500 mt-2">
-          Make sure the database is seeded: <code>npm run db:seed</code>
+      </div>
+    );
+  }
+
+  if (isLocked) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-20 text-center">
+        <div className="text-5xl mb-4">🔒</div>
+        <h1 className="text-2xl font-serif font-bold text-masters-green mb-3">
+          Entries Are Closed
+        </h1>
+        <p className="text-gray-600 mb-6">
+          The contest is locked. No new lineups are being accepted.
         </p>
+        <a
+          href="/leaderboard"
+          className="inline-block bg-masters-green text-white font-bold px-6 py-3 rounded-lg hover:bg-green-800"
+        >
+          View Leaderboard →
+        </a>
       </div>
     );
   }
@@ -113,31 +131,30 @@ export default function PlayPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-serif font-bold text-masters-green">
-          Build Your Lineup
-        </h1>
+        <h1 className="text-2xl font-serif font-bold text-masters-green">Build Your Lineup</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Select {ROSTER_SIZE} players · Stay under ${SALARY_CAP.toLocaleString()} salary cap
+          Select {ROSTER_SIZE} players · Stay under ${SALARY_CAP.toLocaleString()} salary cap · One entry per person
         </p>
       </div>
 
-      {/* Name input */}
-      <div className="mb-5 max-w-sm">
+      {/* Entry name */}
+      <div className="mb-4 max-w-sm">
         <label className="block text-sm font-semibold text-gray-700 mb-1">
-          Your Name <span className="text-red-500">*</span>
+          Entry Name <span className="text-red-500">*</span>
         </label>
         <input
           type="text"
-          placeholder="Enter your name"
+          placeholder="Your name (e.g. Sean Wagner)"
           value={userName}
           onChange={(e) => setUserName(e.target.value)}
           maxLength={100}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-masters-green"
         />
+        <p className="text-xs text-gray-400 mt-1">One entry per person — this becomes your lineup name on the leaderboard.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Player pool — takes 2 cols */}
+        {/* Player pool */}
         <div className="lg:col-span-2">
           <PlayerTable
             players={players}
@@ -149,50 +166,67 @@ export default function PlayPage() {
           />
         </div>
 
-        {/* Sidebar — sticky on desktop */}
+        {/* Sidebar */}
         <div className="lg:sticky lg:top-6 self-start flex flex-col gap-4">
-          <SalaryTracker
-            totalSalary={totalSalary}
-            selectedCount={selectedPlayers.length}
-          />
+          <SalaryTracker totalSalary={totalSalary} selectedCount={selectedPlayers.length} />
 
           <div>
             <h2 className="text-sm font-semibold text-gray-700 mb-2">
               Your Roster ({selectedPlayers.length}/{ROSTER_SIZE})
             </h2>
-            <RosterBuilder
-              selectedPlayers={selectedPlayers}
-              onRemove={removePlayer}
+            <RosterBuilder selectedPlayers={selectedPlayers} onRemove={removePlayer} />
+          </div>
+
+          {/* Optional personal code */}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <label className="block text-xs font-semibold text-amber-800 mb-1">
+              Personal Edit Code <span className="text-amber-500">(optional but recommended)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. golf2026"
+              value={editCode}
+              onChange={(e) => setEditCode(e.target.value)}
+              maxLength={50}
+              className="w-full border border-amber-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+            />
+            <p className="text-xs text-amber-700 mt-1">
+              Set a code now so you can edit your lineup before the contest locks. Without one, only the commissioner can make changes.
+            </p>
+          </div>
+
+          {/* Optional public message */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Public Message <span className="text-gray-400">(optional)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="Shown on leaderboard after lock"
+              value={publicMessage}
+              onChange={(e) => setPublicMessage(e.target.value)}
+              maxLength={200}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-masters-green"
             />
           </div>
 
-          {/* Validation messages */}
-          <div className="text-xs text-gray-500 space-y-1">
-            {userName.trim() === "" && (
-              <p className="text-amber-600">⚠ Enter your name above</p>
-            )}
+          {/* Validation hints */}
+          <div className="text-xs text-gray-500 space-y-0.5">
+            {userName.trim() === "" && <p className="text-amber-600">⚠ Enter your entry name above</p>}
             {selectedPlayers.length < ROSTER_SIZE && (
-              <p>
-                ⚠ Select {ROSTER_SIZE - selectedPlayers.length} more player
-                {ROSTER_SIZE - selectedPlayers.length !== 1 ? "s" : ""}
-              </p>
+              <p>⚠ Select {ROSTER_SIZE - selectedPlayers.length} more player{ROSTER_SIZE - selectedPlayers.length !== 1 ? "s" : ""}</p>
             )}
             {totalSalary > SALARY_CAP && (
-              <p className="text-red-600">
-                ⚠ Over salary cap by $
-                {(totalSalary - SALARY_CAP).toLocaleString()}
-              </p>
+              <p className="text-red-600">⚠ Over cap by ${(totalSalary - SALARY_CAP).toLocaleString()}</p>
             )}
           </div>
 
-          {/* Error */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
               {error}
             </div>
           )}
 
-          {/* Submit */}
           <button
             onClick={handleSubmit}
             disabled={!isValid || submitting}

@@ -1,12 +1,20 @@
 /**
- * Scoring engine — computes entry scores from current PlayerStat records.
+ * Scoring engine — computes entry scores from PlayerStat records.
  *
- * Decoupled from the UI and from the stat provider. Just reads the DB
- * and applies the scoring config.
+ * Scoring buckets:
+ *   scoreR1  = sum of 6 players' r1Pts  (Thursday)
+ *   scoreR2  = sum of 6 players' r2Pts  (Friday)
+ *   scoreR3  = sum of 6 players' r3Pts  (Saturday)
+ *   scoreR4  = sum of 6 players' r4Pts  (Sunday Masters)
+ *   sundayBonusPoints = from assigned SundayTeam.bonusPoints
+ *   score (overall) = r1+r2+r3+r4+sundayBonus
+ *
+ * Daily prizes use scoreR1/R2/R3/R4 independently.
+ * Overall prize uses score (overall).
+ * Sunday bonus only counts toward overall.
  */
 
 import { prisma } from "@/lib/prisma";
-import { computePlayerScore, DEFAULT_SCORING_CONFIG } from "./config";
 import { EVENT_NAME } from "@/lib/constants";
 
 export interface PlayerScoreResult {
@@ -14,21 +22,29 @@ export interface PlayerScoreResult {
   playerName: string;
   position: string | null;
   thru: string | null;
-  totalToPar: number | null;
-  fantasyScore: number;
+  r1Pts: number;
+  r2Pts: number;
+  r3Pts: number;
+  r4Pts: number;
 }
 
 export interface EntryScoreResult {
   entryId: string;
   userName: string;
-  totalScore: number;
+  scoreR1: number;
+  scoreR2: number;
+  scoreR3: number;
+  scoreR4: number;
+  sundayBonusPoints: number;
+  scoreOverall: number;
   players: PlayerScoreResult[];
+  // Shown after lock only
+  sundayRepName: string | null;
+  sundayTeamName: string | null;
+  publicMessage: string | null;
 }
 
-/**
- * Compute scores for all active entries.
- * Called by the sync job after stats are updated.
- */
+/** Recompute and persist scores for all active entries. Called after each sync. */
 export async function computeAllEntryScores(): Promise<void> {
   const entries = await prisma.entry.findMany({
     where: { status: "active" },
@@ -37,7 +53,7 @@ export async function computeAllEntryScores(): Promise<void> {
         include: {
           player: {
             include: {
-              entries: {
+              stats: {
                 where: { eventName: EVENT_NAME },
                 take: 1,
               },
@@ -49,38 +65,71 @@ export async function computeAllEntryScores(): Promise<void> {
   });
 
   for (const entry of entries) {
-    let totalScore = 0;
+    let r1 = 0, r2 = 0, r3 = 0, r4 = 0;
 
     for (const ep of entry.players) {
-      const stat = ep.player.entries[0];
-      const playerScore = computePlayerScore(
-        stat?.totalToPar,
-        stat?.position,
-        DEFAULT_SCORING_CONFIG
-      );
-      totalScore += playerScore;
+      const stat = ep.player.stats[0];
+      if (!stat) continue;
+      r1 += stat.r1Pts ?? 0;
+      r2 += stat.r2Pts ?? 0;
+      r3 += stat.r3Pts ?? 0;
+      r4 += stat.r4Pts ?? 0;
     }
+
+    // Sunday bonus: look up assigned team
+    let sundayBonus = entry.sundayBonusPoints;
+    if (entry.sundayTeamName) {
+      const team = await prisma.sundayTeam.findUnique({
+        where: { teamName: entry.sundayTeamName },
+      });
+      if (team) sundayBonus = team.bonusPoints;
+    }
+
+    const overall = r1 + r2 + r3 + r4 + sundayBonus;
 
     await prisma.entry.update({
       where: { id: entry.id },
-      data: { score: totalScore },
+      data: {
+        scoreR1: r1,
+        scoreR2: r2,
+        scoreR3: r3,
+        scoreR4: r4,
+        sundayBonusPoints: sundayBonus,
+        score: overall,
+      },
     });
   }
 }
 
+/** Current active round (1-4) based on today's date ET, or null if not in tournament */
+export function getActiveRound(): 1 | 2 | 3 | 4 | null {
+  const now = new Date();
+  const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const month = et.getMonth() + 1; // 1-based
+  const day = et.getDate();
+
+  if (month !== 4) return null;
+  if (day === 9)  return 1;  // Thursday
+  if (day === 10) return 2;  // Friday
+  if (day === 11) return 3;  // Saturday
+  if (day === 12) return 4;  // Sunday
+  return null;
+}
+
 /**
- * Get scored leaderboard data for display.
+ * Get full leaderboard data.
+ * isLocked controls whether lineup details are visible.
  */
-export async function getLeaderboard(): Promise<EntryScoreResult[]> {
+export async function getLeaderboard(isLocked: boolean): Promise<EntryScoreResult[]> {
   const entries = await prisma.entry.findMany({
     where: { status: "active" },
-    orderBy: { score: "asc" }, // Lower = better (golf scoring)
+    orderBy: { score: "desc" }, // Higher = better (fantasy points)
     include: {
       players: {
         include: {
           player: {
             include: {
-              entries: {
+              stats: {
                 where: { eventName: EVENT_NAME },
                 take: 1,
               },
@@ -94,21 +143,30 @@ export async function getLeaderboard(): Promise<EntryScoreResult[]> {
   return entries.map((entry) => ({
     entryId: entry.id,
     userName: entry.userName,
-    totalScore: entry.score,
-    players: entry.players.map((ep) => {
-      const stat = ep.player.entries[0];
-      return {
-        playerId: ep.player.id,
-        playerName: ep.player.name,
-        position: stat?.position ?? null,
-        thru: stat?.thru ?? null,
-        totalToPar: stat?.totalToPar ?? null,
-        fantasyScore: computePlayerScore(
-          stat?.totalToPar,
-          stat?.position,
-          DEFAULT_SCORING_CONFIG
-        ),
-      };
-    }),
+    scoreR1: entry.scoreR1,
+    scoreR2: entry.scoreR2,
+    scoreR3: entry.scoreR3,
+    scoreR4: entry.scoreR4,
+    sundayBonusPoints: entry.sundayBonusPoints,
+    scoreOverall: entry.score,
+    // Only expose lineup details after lock
+    players: isLocked
+      ? entry.players.map((ep) => {
+          const stat = ep.player.stats[0];
+          return {
+            playerId: ep.player.id,
+            playerName: ep.player.name,
+            position: stat?.position ?? null,
+            thru: stat?.thru ?? null,
+            r1Pts: stat?.r1Pts ?? 0,
+            r2Pts: stat?.r2Pts ?? 0,
+            r3Pts: stat?.r3Pts ?? 0,
+            r4Pts: stat?.r4Pts ?? 0,
+          };
+        })
+      : [],
+    sundayRepName: isLocked ? (entry.sundayRepName ?? null) : null,
+    sundayTeamName: isLocked ? (entry.sundayTeamName ?? null) : null,
+    publicMessage: isLocked ? (entry.publicMessage ?? null) : null,
   }));
 }

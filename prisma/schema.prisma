@@ -12,11 +12,11 @@ model Player {
   name      String
   salary    Int
   isActive  Boolean  @default(true)
-  sourceRow Int?     // row number from spreadsheet for traceability
+  sourceRow Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  entries PlayerStat[]
+  stats        PlayerStat[]
   entryPlayers EntryPlayer[]
 
   @@index([isActive])
@@ -24,11 +24,26 @@ model Player {
 
 model Entry {
   id          String   @id @default(cuid())
-  userName    String
+  userName    String   @unique           // "entry name" — one per person, unique
   submittedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   totalSalary Int
-  score       Float    @default(0)
   status      String   @default("active") // active | disqualified
+
+  // Optional entry fields
+  editCodeHash      String?  // bcrypt/sha256 hash of personal edit code
+  publicMessage     String?  // shown to everyone after lock
+  sundayRepName     String?  // who represents this entry on Sunday
+  sundayTeamName    String?  // which Sunday team is assigned
+  isPlayingSunday   Boolean  @default(true)
+
+  // Scoring — one bucket per round + Sunday bonus + overall
+  scoreR1           Float @default(0)  // Thursday
+  scoreR2           Float @default(0)  // Friday
+  scoreR3           Float @default(0)  // Saturday
+  scoreR4           Float @default(0)  // Sunday Masters round
+  sundayBonusPoints Float @default(0)  // Sunday golf outing bonus
+  score             Float @default(0)  // overall = r1+r2+r3+r4+sundayBonus
 
   players EntryPlayer[]
 
@@ -55,13 +70,38 @@ model PlayerStat {
   thru           String?  // "F", "9", "14", etc.
   totalToPar     Int?
   holesCompleted Int?
-  rawStatPayload Json?    // raw provider response for debugging
+
+  // Fantasy points per round (computed from hole-by-hole scoring)
+  r1Pts Float?
+  r2Pts Float?
+  r3Pts Float?
+  r4Pts Float?
+
+  rawStatPayload Json?
   lastSyncedAt   DateTime @default(now())
 
   player Player @relation(fields: [playerId], references: [id])
 
   @@unique([playerId, eventName])
   @@index([playerId])
+}
+
+// Sunday golf outing teams and their bonus points
+model SundayTeam {
+  id          String   @id @default(cuid())
+  teamName    String   @unique
+  bonusPoints Float    @default(0)  // computed from hole scoring
+  holeScores  Json?    // [{ hole: 1, result: "birdie", pts: 3 }, ...]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Contest-wide settings — always one row with id="main"
+model ContestSettings {
+  id              String   @id @default("main")
+  isForceUnlocked Boolean  @default(false) // commissioner override to keep open past deadline
+  lockedAt        DateTime? // when commissioner manually locked (null = use deadline)
+  updatedAt       DateTime @updatedAt
 }
 
 model SyncRun {

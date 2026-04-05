@@ -25,6 +25,12 @@ yarn-error.log*
 # Prisma
 prisma/dev.db
 
+# Netlify build artifacts — never commit these
+.netlify/
+
+# GitHub Actions — requires workflow scope token to push; managed manually
+.github/
+
 # Misc
 .DS_Store
 *.pem

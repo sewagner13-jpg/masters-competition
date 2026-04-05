@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { submitEntrySchema, validateSalaryCap } from "@/lib/validation";
 import { SALARY_CAP } from "@/lib/constants";
+import { hashCode } from "@/lib/editCode";
+import { isContestLocked } from "@/lib/lock";
 
 export const dynamic = "force-dynamic";
 
@@ -17,9 +19,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { userName, playerIds } = parsed.data;
+    const { userName, playerIds, editCode, publicMessage } = parsed.data;
 
-    // Fetch players and validate they exist and are active
+    // Check contest lock
+    const settings = await prisma.contestSettings.findUnique({ where: { id: "main" } });
+    if (isContestLocked(settings)) {
+      return NextResponse.json(
+        { error: "The contest is locked. No new entries are being accepted." },
+        { status: 403 }
+      );
+    }
+
+    // One entry per name — reject duplicate entry names
+    const existing = await prisma.entry.findUnique({ where: { userName } });
+    if (existing) {
+      return NextResponse.json(
+        { error: `An entry named "${userName}" already exists. Each person may only submit one lineup.` },
+        { status: 409 }
+      );
+    }
+
+    // Fetch players — validate they exist and are active
     const players = await prisma.player.findMany({
       where: { id: { in: playerIds }, isActive: true },
       select: { id: true, name: true, salary: true },
@@ -32,16 +52,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Salary cap validation
+    // Salary cap validation (server-side)
     const { valid, total } = validateSalaryCap(players);
     if (!valid) {
       return NextResponse.json(
         {
-          error: `Salary cap exceeded. Total $${total.toLocaleString()} exceeds cap of $${SALARY_CAP.toLocaleString()}.`,
+          error: `Salary cap exceeded. Total $${total.toLocaleString()} exceeds the $${SALARY_CAP.toLocaleString()} cap.`,
         },
         { status: 400 }
       );
     }
+
+    // Hash personal edit code if provided
+    const editCodeHash =
+      editCode && editCode.trim().length >= 4
+        ? hashCode(editCode.trim())
+        : null;
 
     // Create entry + entryPlayers in a transaction
     const entry = await prisma.$transaction(async (tx) => {
@@ -51,6 +77,8 @@ export async function POST(req: NextRequest) {
           totalSalary: total,
           score: 0,
           status: "active",
+          editCodeHash,
+          publicMessage: publicMessage?.trim() || null,
         },
       });
 
