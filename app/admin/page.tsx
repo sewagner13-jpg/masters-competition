@@ -284,7 +284,7 @@ export default function AdminPage() {
       <section className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
         <h2 className="font-bold text-gray-800 mb-1">Sunday Team Scores</h2>
         <p className="text-xs text-gray-500 mb-4">
-          Enter hole-by-hole scores for each Sunday team. Score to par: -1 = birdie, 0 = par, 1 = bogey, etc.
+          Enter hole-by-hole scores for each Sunday team. Score to par: -1 = birdie, 0 = par, 1 = bogey, 2 = double bogey, 3+ = worse than double bogey.
           Points are computed automatically using the fantasy scoring table.
         </p>
 
@@ -312,7 +312,7 @@ export default function AdminPage() {
               <div key={hole} className="text-center">
                 <div className="text-xs text-gray-400 mb-0.5">{hole}</div>
                 <input
-                  type="number" min={-3} max={4}
+                  type="number" min={-3}
                   value={holeScores[hole] ?? ""}
                   onChange={(e) => setHoleScores((p) => ({ ...p, [hole]: e.target.value }))}
                   className="w-full border border-gray-300 rounded text-center text-sm py-1 focus:outline-none focus:ring-1 focus:ring-masters-green"

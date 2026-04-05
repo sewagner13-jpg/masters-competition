@@ -139,15 +139,16 @@ export const SCORING_ROWS: ScoringRow[] = [
   { result: "Birdie", points: HOLE_POINTS.birdie },
   { result: "Par", points: HOLE_POINTS.par },
   { result: "Bogey", points: HOLE_POINTS.bogey },
-  { result: "Double Bogey or Worse", points: HOLE_POINTS.double_bogey_or_worse },
+  { result: "Double Bogey", points: HOLE_POINTS.double_bogey },
+  { result: "Worse Than Double Bogey", points: HOLE_POINTS.worse_than_double_bogey },
 ];
 
 export const WORKED_EXAMPLE = {
   masters: {
     title: "Masters Round Example",
     copy:
-      "If one golfer goes birdie, par, bogey, and eagle across four holes, those holes are worth +3, +0.5, -0.5, and +8. " +
-      "That is +11.0 fantasy points before the rest of the round is added in.",
+      "If one golfer goes birdie, par, bogey, and eagle across four holes, those holes are worth +3, +0.5, -1, and +8. " +
+      "That is +10.5 fantasy points before the rest of the round is added in.",
     rows: [
       { result: "Birdie", points: HOLE_POINTS.birdie },
       { result: "Par", points: HOLE_POINTS.par },

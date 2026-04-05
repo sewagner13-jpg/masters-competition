@@ -8,8 +8,9 @@
  *   Eagle                      : 8
  *   Birdie                     : 3
  *   Par                        : 0.5
- *   Bogey                      : -0.5
- *   Double bogey or worse      : -1
+ *   Bogey                      : -1
+ *   Double bogey               : -2
+ *   Worse than double bogey    : -5
  *
  * Daily score  = fantasy points from that round only (Thu/Fri/Sat/Sun)
  * Overall score = sum of all 4 rounds + Sunday team bonus
@@ -21,8 +22,9 @@ export const HOLE_POINTS: Record<string, number> = {
   eagle: 8,
   birdie: 3,
   par: 0.5,
-  bogey: -0.5,
-  double_bogey_or_worse: -1,
+  bogey: -1,
+  double_bogey: -2,
+  worse_than_double_bogey: -5,
 };
 
 /**
@@ -35,7 +37,8 @@ export function holeScoreToPoints(scoreToPar: number): number {
   if (scoreToPar === -1) return HOLE_POINTS.birdie;
   if (scoreToPar === 0)  return HOLE_POINTS.par;
   if (scoreToPar === 1)  return HOLE_POINTS.bogey;
-  return HOLE_POINTS.double_bogey_or_worse;                // +2 or worse
+  if (scoreToPar === 2)  return HOLE_POINTS.double_bogey;
+  return HOLE_POINTS.worse_than_double_bogey;              // +3 or worse
 }
 
 /**

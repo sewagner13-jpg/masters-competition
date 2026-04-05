@@ -22,7 +22,7 @@
 - ✅ **Entry edit page** (`/edit/[id]`) — users enter personal code to edit before lock; locked after deadline
 - ✅ **Commissioner override** — master code `1110` bypasses lock and code checks at any time
 - ✅ **Scoring engine** — 5 buckets: R1/R2/R3/R4 (daily) + overall (R1+R2+R3+R4+SundayBonus)
-- ✅ **Real hole scoring config** — double eagle=20, eagle=8, birdie=3, par=0.5, bogey=-0.5, double bogey=-1
+- ✅ **Real hole scoring config** — double eagle=20, eagle=8, birdie=3, par=0.5, bogey=-1, double bogey=-2, worse than double bogey=-5
 - ✅ **Sunday team scores** — commissioner enters hole-by-hole scores per team; bonus applies to overall only
 - ✅ **Sunday assignments** — commissioner assigns rep name + team name + isPlayingSunday per entry in admin panel
 - ✅ **Leaderboard tabs** — Today's Round (default) and Overall; entry detail modal shows golfers/rep/team/message
@@ -109,7 +109,7 @@ Agreed prize structure (all based on $50 buy-in × N entries):
 
 ### Sunday team scores
 1. Admin → Sunday Team Scores section
-2. Enter team name + hole-by-hole scores (score to par: -1=birdie, 0=par, 1=bogey, etc.)
+2. Enter team name + hole-by-hole scores (score to par: -1=birdie, 0=par, 1=bogey, 2=double bogey, 3+=worse than double bogey)
 3. Click Save Team Scores → bonus points computed automatically
 
 ### Post-lock roster edit (commissioner)
