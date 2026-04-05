@@ -149,6 +149,9 @@ function LeaderboardContent() {
         return (b[key] as number) - (a[key] as number);
       })
     : [];
+  const preLockEntries = data
+    ? [...data.leaderboard].sort((a, b) => a.userName.localeCompare(b.userName))
+    : [];
 
   const todayRound = data?.activeRound ?? null;
   const todayLabel = todayRound ? ROUND_LABELS[todayRound] : "Today";
@@ -186,24 +189,26 @@ function LeaderboardContent() {
       )}
 
       {/* Tab bar */}
-      <div className="flex gap-2 mb-5 border-b border-gray-200">
-        {[
-          { key: "today" as ViewTab, label: todayLabel ? `${todayLabel} (Today)` : "Today's Round" },
-          { key: "overall" as ViewTab, label: "Overall" },
-        ].map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
-              tab === key
-                ? "border-masters-green text-masters-green"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {data?.isLocked && (
+        <div className="flex gap-2 mb-5 border-b border-gray-200">
+          {[
+            { key: "today" as ViewTab, label: todayLabel ? `${todayLabel} (Today)` : "Today's Round" },
+            { key: "overall" as ViewTab, label: "Overall" },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
+                tab === key
+                  ? "border-masters-green text-masters-green"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading && <div className="text-center text-masters-green animate-pulse py-12">Loading...</div>}
       {error && <div className="text-center text-red-600 py-12">{error}</div>}
@@ -218,10 +223,33 @@ function LeaderboardContent() {
       )}
 
       {data && !data.isLocked && data.leaderboard.length > 0 && (
-        <div className="text-center py-10 text-gray-500">
-          <p className="text-3xl mb-3">🔐</p>
-          <p className="font-semibold text-lg">{data.leaderboard.length} {data.leaderboard.length === 1 ? "entry" : "entries"} submitted</p>
-          <p className="text-sm mt-1">Lineups are hidden until the contest locks on Thu Apr 9 at 7:45 AM ET.</p>
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 text-center">
+            <p className="text-3xl mb-2">🔐</p>
+            <p className="font-semibold text-lg text-gray-800">
+              {data.leaderboard.length} {data.leaderboard.length === 1 ? "entry" : "entries"} submitted
+            </p>
+            <p className="text-sm mt-1 text-gray-500">
+              Entry names are visible now. Lineups stay hidden until the contest locks on Thu Apr 9 at 7:45 AM ET.
+            </p>
+          </div>
+
+          <div className="grid gap-3 p-4 sm:grid-cols-2">
+            {preLockEntries.map((entry, idx) => (
+              <div
+                key={entry.entryId}
+                className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3"
+              >
+                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-masters-green/10 text-sm font-bold text-masters-green">
+                  {idx + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-gray-900">{entry.userName}</p>
+                  <p className="text-xs text-gray-500">Lineup submitted • players hidden until lock</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
