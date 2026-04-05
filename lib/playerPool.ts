@@ -4,6 +4,7 @@ export interface PlayerPoolEntry {
   amateur?: boolean;
 }
 
+// 2026 Masters field aligned to the official invitees list qualified as of 2026-04-02.
 export const PLAYER_POOL: PlayerPoolEntry[] = [
   { name: "Scottie Scheffler", salary: 11800 },
   { name: "Rory McIlroy", salary: 11500 },
@@ -19,6 +20,7 @@ export const PLAYER_POOL: PlayerPoolEntry[] = [
   { name: "Justin Thomas", salary: 9300 },
   { name: "Jordan Spieth", salary: 9200 },
   { name: "Cameron Smith", salary: 9100 },
+  { name: "Brooks Koepka", salary: 9000 },
   { name: "Shane Lowry", salary: 8900 },
   { name: "Brian Harman", salary: 8800 },
   { name: "Sam Burns", salary: 8700 },
@@ -29,11 +31,13 @@ export const PLAYER_POOL: PlayerPoolEntry[] = [
   { name: "Corey Conners", salary: 8400 },
   { name: "Sungjae Im", salary: 8400 },
   { name: "Robert MacIntyre", salary: 8300 },
+  { name: "Sepp Straka", salary: 8300 },
   { name: "Max Homa", salary: 8200 },
   { name: "Matt Fitzpatrick", salary: 8200 },
   { name: "Keegan Bradley", salary: 8100 },
   { name: "Tyrrell Hatton", salary: 8000 },
   { name: "Daniel Berger", salary: 7900 },
+  { name: "Justin Rose", salary: 7900 },
   { name: "Jason Day", salary: 7800 },
   { name: "Dustin Johnson", salary: 7700 },
   { name: "Harris English", salary: 7600 },
@@ -51,6 +55,7 @@ export const PLAYER_POOL: PlayerPoolEntry[] = [
   { name: "Kurt Kitayama", salary: 7200 },
   { name: "Min Woo Lee", salary: 7200 },
   { name: "Chris Gotterup", salary: 7100 },
+  { name: "Max Greyserman", salary: 7000 },
   { name: "Carlos Ortiz", salary: 7000 },
   { name: "Rasmus Hojgaard", salary: 6900 },
   { name: "Jake Knapp", salary: 6800 },
