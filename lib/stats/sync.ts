@@ -57,6 +57,13 @@ export async function runStatSync(options?: {
 
       if (!player) continue;
 
+      // Only overwrite per-round pts if the provider supplied them
+      const roundPtsUpdate: Record<string, number> = {};
+      if (stat.r1Pts != null) roundPtsUpdate.r1Pts = stat.r1Pts;
+      if (stat.r2Pts != null) roundPtsUpdate.r2Pts = stat.r2Pts;
+      if (stat.r3Pts != null) roundPtsUpdate.r3Pts = stat.r3Pts;
+      if (stat.r4Pts != null) roundPtsUpdate.r4Pts = stat.r4Pts;
+
       await prisma.playerStat.upsert({
         where: { playerId_eventName: { playerId: player.id, eventName: EVENT_NAME } },
         update: {
@@ -67,6 +74,7 @@ export async function runStatSync(options?: {
           round: stat.round,
           rawStatPayload: (stat.rawPayload ?? {}) as object,
           lastSyncedAt: new Date(),
+          ...roundPtsUpdate,
         },
         create: {
           playerId: player.id,
@@ -77,6 +85,10 @@ export async function runStatSync(options?: {
           holesCompleted: stat.holesCompleted,
           round: stat.round,
           rawStatPayload: (stat.rawPayload ?? {}) as object,
+          r1Pts: stat.r1Pts ?? null,
+          r2Pts: stat.r2Pts ?? null,
+          r3Pts: stat.r3Pts ?? null,
+          r4Pts: stat.r4Pts ?? null,
         },
       });
 

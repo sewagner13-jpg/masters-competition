@@ -5,10 +5,9 @@
  * by changing MASTERS_STATS_PROVIDER in your .env without touching
  * anything else in the app.
  *
- * To add a real provider:
- *   1. Create lib/stats/providers/your-provider.ts
- *   2. Implement the StatsProvider interface
- *   3. Add it to the switch in getStatsProvider()
+ * Supported values:
+ *   mock  — returns empty data (default; scores show 0 until real provider set)
+ *   espn  — fetches live data from ESPN's public golf API (use this for tournament)
  */
 
 export interface PlayerStatData {
@@ -18,6 +17,15 @@ export interface PlayerStatData {
   totalToPar: number | null;
   holesCompleted: number | null;
   round: number | null;
+  /**
+   * Per-round fantasy points, pre-computed by the provider.
+   * Null = round not yet played. When present, sync.ts writes these
+   * directly to PlayerStat.r1Pts–r4Pts so entry scores update automatically.
+   */
+  r1Pts?: number | null;
+  r2Pts?: number | null;
+  r3Pts?: number | null;
+  r4Pts?: number | null;
   rawPayload?: Record<string, unknown>;
 }
 
@@ -28,7 +36,7 @@ export interface StatsProvider {
 }
 
 // ------------------------------------------------------------------
-// Mock provider — returns placeholder data so the app works end-to-end
+// Mock provider — returns empty data so the app works end-to-end
 // before a real stats source is wired in.
 // ------------------------------------------------------------------
 export class MockStatsProvider implements StatsProvider {
@@ -37,8 +45,6 @@ export class MockStatsProvider implements StatsProvider {
   }
 
   async getLivePlayerStats(): Promise<PlayerStatData[]> {
-    // Returns empty — no mock scores so the leaderboard just shows 0s
-    // until a real provider is plugged in.
     return [];
   }
 
@@ -57,14 +63,15 @@ export function getStatsProvider(): StatsProvider {
     case "mock":
       return new MockStatsProvider();
 
-    // Add real providers here:
-    // case "espn":
-    //   return new EspnStatsProvider();
-    // case "pga":
-    //   return new PgaStatsProvider();
+    case "espn": {
+      // Lazy import keeps ESPN code out of the mock bundle
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { EspnStatsProvider } = require("./providers/espn");
+      return new EspnStatsProvider() as StatsProvider;
+    }
 
     default:
-      console.warn(`Unknown stats provider "${provider}", falling back to mock`);
+      console.warn(`[stats] Unknown provider "${provider}", falling back to mock`);
       return new MockStatsProvider();
   }
 }

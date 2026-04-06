@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { PlayerTable, type Player } from "@/components/PlayerTable";
 import { RosterBuilder } from "@/components/RosterBuilder";
 import { SalaryTracker } from "@/components/SalaryTracker";
-import { ROSTER_SIZE, SALARY_CAP } from "@/lib/constants";
+import { ROSTER_SIZE, SALARY_CAP, BUY_IN } from "@/lib/constants";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,6 +74,96 @@ function statusBadge(status: string) {
     running: "bg-blue-100 text-blue-800",
   };
   return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${c[status] ?? "bg-gray-100 text-gray-700"}`}>{status}</span>;
+}
+
+function usd(n: number) {
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// ─── Payout Calculator ────────────────────────────────────────────────────────
+
+function PayoutCalculator({ entryCount }: { entryCount: number }) {
+  const [customCount, setCustomCount] = useState("");
+  const n = customCount !== "" ? Math.max(0, parseInt(customCount) || 0) : entryCount;
+  const pot = n * BUY_IN;
+
+  const structure = [
+    { label: "Thu — 1st place", pct: 0.075, bucket: "Daily (×4)" },
+    { label: "Thu — 2nd place", pct: 0.025, bucket: "Daily (×4)" },
+    { label: "Fri — 1st place", pct: 0.075, bucket: "Daily (×4)" },
+    { label: "Fri — 2nd place", pct: 0.025, bucket: "Daily (×4)" },
+    { label: "Sat — 1st place", pct: 0.075, bucket: "Daily (×4)" },
+    { label: "Sat — 2nd place", pct: 0.025, bucket: "Daily (×4)" },
+    { label: "Sun — 1st place", pct: 0.075, bucket: "Daily (×4)" },
+    { label: "Sun — 2nd place", pct: 0.025, bucket: "Daily (×4)" },
+    { label: "Overall — 1st", pct: 0.30, bucket: "Overall" },
+    { label: "Overall — 2nd", pct: 0.15, bucket: "Overall" },
+    { label: "Overall — 3rd", pct: 0.10, bucket: "Overall" },
+    { label: "Last place", pct: 0.05, bucket: "Overall" },
+  ];
+
+  return (
+    <div>
+      <p className="text-xs text-gray-500 mb-3">
+        <strong>{n}</strong> entries × ${BUY_IN} buy-in ={" "}
+        <strong className="text-masters-green">{usd(pot)}</strong> total pot.
+        Ties split the combined prize evenly — no tiebreakers.
+      </p>
+
+      <div className="flex items-center gap-2 mb-4">
+        <label className="text-xs text-gray-600 font-medium">Override count:</label>
+        <input
+          type="number" min={0}
+          value={customCount}
+          onChange={(e) => setCustomCount(e.target.value)}
+          placeholder={String(entryCount)}
+          className="border border-gray-200 rounded px-2 py-1 text-xs w-20 focus:outline-none focus:ring-1 focus:ring-masters-green"
+        />
+        {customCount !== "" && (
+          <button onClick={() => setCustomCount("")} className="text-xs text-gray-400 underline">Reset</button>
+        )}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-gray-500 border-b">
+              <th className="pb-2 pr-3 font-semibold w-24">Bucket</th>
+              <th className="pb-2 pr-4 font-semibold">Prize</th>
+              <th className="pb-2 pr-4 font-semibold text-right">%</th>
+              <th className="pb-2 font-semibold text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {structure.map((row, i) => {
+              const prevBucket = i > 0 ? structure[i - 1].bucket : null;
+              const showBucket = row.bucket !== prevBucket;
+              return (
+                <tr key={row.label} className={`border-b border-gray-50 ${showBucket && i > 0 ? "border-t border-gray-200" : ""}`}>
+                  <td className="py-1.5 pr-3 text-xs font-semibold text-masters-green align-top">
+                    {showBucket ? row.bucket : ""}
+                  </td>
+                  <td className="py-1.5 pr-4 text-gray-700 text-sm">{row.label}</td>
+                  <td className="py-1.5 pr-4 text-right text-gray-500 text-xs">{(row.pct * 100).toFixed(1)}%</td>
+                  <td className="py-1.5 text-right font-mono font-semibold text-gray-900 text-sm">
+                    {pot > 0 ? usd(pot * row.pct) : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+            <tr className="border-t-2 border-gray-300 font-bold text-sm">
+              <td colSpan={2} className="pt-2">Total</td>
+              <td className="pt-2 text-right text-xs text-gray-500">100%</td>
+              <td className="pt-2 text-right font-mono text-masters-green">{pot > 0 ? usd(pot) : "—"}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-gray-400 mt-2">
+        Daily: 4 rounds × 10% of pot (7.5% + 2.5%). Overall: 55% (30%+15%+10%). Last: 5%.
+      </p>
+    </div>
+  );
 }
 
 // ─── Main Admin Page ──────────────────────────────────────────────────────────
@@ -240,6 +330,12 @@ export default function AdminPage() {
         <p className="text-xs text-gray-400 mt-2">Master code for direct entry edits: <code className="font-mono bg-gray-100 px-1 rounded">use the master code you set</code></p>
       </section>
 
+      {/* ── Payout Calculator ── */}
+      <section className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
+        <h2 className="font-bold text-gray-800 mb-1">Payout Calculator</h2>
+        <PayoutCalculator entryCount={entries.length} />
+      </section>
+
       {/* ── Stat Sync ── */}
       <section className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
         <h2 className="font-bold text-gray-800 mb-3">Manual Stat Sync</h2>
@@ -274,22 +370,32 @@ export default function AdminPage() {
       {/* ── Sunday Assignments ── */}
       <section className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
         <h2 className="font-bold text-gray-800 mb-1">Sunday Assignments</h2>
-        <p className="text-xs text-gray-500 mb-4">Assign a Sunday representative and team to each entry for admin tracking and Sunday bonus scoring.</p>
+        <p className="text-xs text-gray-500 mb-4">
+          Assign a Sunday rep and team to each entry. Team name dropdown shows existing teams. Click Save per row.
+        </p>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-gray-500 border-b text-xs">
-              <th className="pb-2 pr-3 font-semibold">Entry</th>
-              <th className="pb-2 pr-3 font-semibold">Representative</th>
-              <th className="pb-2 pr-3 font-semibold">Team</th>
-              <th className="pb-2 font-semibold">Playing?</th>
-            </tr></thead>
+            <thead>
+              <tr className="text-left text-gray-500 border-b text-xs">
+                <th className="pb-2 pr-3 font-semibold">Entry</th>
+                <th className="pb-2 pr-3 font-semibold">Representative</th>
+                <th className="pb-2 pr-3 font-semibold">Team</th>
+                <th className="pb-2 pr-3 font-semibold text-center">Playing?</th>
+                <th className="pb-2 font-semibold"></th>
+              </tr>
+            </thead>
             <tbody>
               {entries.map((entry) => (
-                <SundayRow key={entry.id} entry={entry} onSave={saveEntrySettings} />
+                <SundayRow
+                  key={entry.id}
+                  entry={entry}
+                  teamOptions={sundayTeams.map((t) => t.teamName)}
+                  onSave={saveEntrySettings}
+                />
               ))}
               {entries.length === 0 && (
-                <tr><td colSpan={4} className="py-4 text-center text-gray-400 text-sm">No entries yet.</td></tr>
+                <tr><td colSpan={5} className="py-4 text-center text-gray-400 text-sm">No entries yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -304,13 +410,18 @@ export default function AdminPage() {
           Points are computed automatically using the fantasy scoring table.
         </p>
 
-        {/* Existing teams */}
+        {/* Existing teams — click to load into editor */}
         {sundayTeams.length > 0 && (
           <div className="mb-4 flex flex-wrap gap-2">
             {sundayTeams.map((t) => (
-              <span key={t.id} className="bg-green-50 border border-green-200 text-xs px-3 py-1 rounded-full text-green-800">
+              <button
+                key={t.id}
+                onClick={() => setNewTeamName(t.teamName)}
+                className="bg-green-50 border border-green-200 text-xs px-3 py-1 rounded-full text-green-800 hover:bg-green-100"
+                title="Click to load and edit"
+              >
                 {t.teamName}: <strong>{t.bonusPoints.toFixed(1)} pts</strong>
-              </span>
+              </button>
             ))}
           </div>
         )}
@@ -360,7 +471,8 @@ export default function AdminPage() {
                 <th className="pb-2 pr-2 text-right">Sat</th>
                 <th className="pb-2 pr-2 text-right">Sun</th>
                 <th className="pb-2 pr-2 text-right">Sun Bonus</th>
-                <th className="pb-2 text-right font-bold">Overall</th>
+                <th className="pb-2 pr-3 text-right font-bold">Overall</th>
+                <th className="pb-2"></th>
               </tr></thead>
               <tbody>
                 {[...entries].sort((a, b) => b.score - a.score).map((e) => (
@@ -371,7 +483,10 @@ export default function AdminPage() {
                     <td className="py-2 pr-2 text-right font-mono text-xs">{fmt(e.scoreR3)}</td>
                     <td className="py-2 pr-2 text-right font-mono text-xs">{fmt(e.scoreR4)}</td>
                     <td className="py-2 pr-2 text-right font-mono text-xs">{fmt(e.sundayBonusPoints)}</td>
-                    <td className="py-2 text-right font-mono font-bold text-masters-green">{fmt(e.score)}</td>
+                    <td className="py-2 pr-3 text-right font-mono font-bold text-masters-green">{fmt(e.score)}</td>
+                    <td className="py-2">
+                      <a href={`/edit/${e.id}`} className="text-xs text-masters-green underline hover:text-green-800">Edit →</a>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -431,19 +546,22 @@ export default function AdminPage() {
   );
 }
 
-// ─── Sunday Row (inline editable) ────────────────────────────────────────────
+// ─── Sunday Row (inline editable with team autocomplete) ─────────────────────
 
 function SundayRow({
   entry,
+  teamOptions,
   onSave,
 }: {
   entry: EntryAdmin;
+  teamOptions: string[];
   onSave: (id: string, fields: Partial<EntryAdmin>) => Promise<void>;
 }) {
   const [rep, setRep] = useState(entry.sundayRepName ?? "");
   const [team, setTeam] = useState(entry.sundayTeamName ?? "");
   const [playing, setPlaying] = useState(entry.isPlayingSunday);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const isDirty =
     rep !== (entry.sundayRepName ?? "") ||
@@ -452,34 +570,66 @@ function SundayRow({
 
   async function save() {
     setSaving(true);
-    await onSave(entry.id, { sundayRepName: rep || null, sundayTeamName: team || null, isPlayingSunday: playing } as Partial<EntryAdmin>);
+    await onSave(entry.id, {
+      sundayRepName: rep.trim() || null,
+      sundayTeamName: team.trim() || null,
+      isPlayingSunday: playing,
+    } as Partial<EntryAdmin>);
     setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   }
 
+  const listId = `teams-${entry.id}`;
+
   return (
-    <tr className="border-b border-gray-50">
-      <td className="py-2 pr-3 font-medium text-gray-900 whitespace-nowrap">{entry.userName}</td>
+    <tr className="border-b border-gray-50 hover:bg-gray-50/40">
+      <td className="py-2 pr-3 font-medium text-gray-900 whitespace-nowrap text-sm">{entry.userName}</td>
       <td className="py-2 pr-3">
-        <input type="text" value={rep} onChange={(e) => setRep(e.target.value)}
-          placeholder="Name"
-          className="border border-gray-200 rounded px-2 py-1 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-masters-green" />
+        <input
+          type="text"
+          value={rep}
+          onChange={(e) => setRep(e.target.value)}
+          placeholder="Rep name"
+          className="border border-gray-200 rounded px-2 py-1 text-xs w-36 focus:outline-none focus:ring-1 focus:ring-masters-green"
+        />
       </td>
       <td className="py-2 pr-3">
-        <input type="text" value={team} onChange={(e) => setTeam(e.target.value)}
+        <input
+          type="text"
+          list={listId}
+          value={team}
+          onChange={(e) => setTeam(e.target.value)}
           placeholder="Team name"
-          className="border border-gray-200 rounded px-2 py-1 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-masters-green" />
+          className="border border-gray-200 rounded px-2 py-1 text-xs w-36 focus:outline-none focus:ring-1 focus:ring-masters-green"
+        />
+        <datalist id={listId}>
+          {teamOptions.map((t) => <option key={t} value={t} />)}
+        </datalist>
+      </td>
+      <td className="py-2 pr-3 text-center">
+        <input
+          type="checkbox"
+          checked={playing}
+          onChange={(e) => setPlaying(e.target.checked)}
+          className="accent-masters-green w-4 h-4"
+          title="Playing Sunday"
+        />
       </td>
       <td className="py-2">
-        <div className="flex items-center gap-2">
-          <input type="checkbox" checked={playing} onChange={(e) => setPlaying(e.target.checked)}
-            className="accent-masters-green" />
-          {isDirty && (
-            <button onClick={save} disabled={saving}
-              className="text-xs bg-masters-green text-white px-2 py-0.5 rounded hover:bg-green-800 disabled:opacity-50">
-              {saving ? "..." : "Save"}
-            </button>
-          )}
-        </div>
+        {saved ? (
+          <span className="text-xs text-green-600 font-semibold">✓ Saved</span>
+        ) : isDirty ? (
+          <button
+            onClick={save}
+            disabled={saving}
+            className="text-xs bg-masters-green text-white px-2.5 py-1 rounded hover:bg-green-800 disabled:opacity-50 font-semibold"
+          >
+            {saving ? "..." : "Save"}
+          </button>
+        ) : (
+          <span className="text-xs text-gray-300">—</span>
+        )}
       </td>
     </tr>
   );
