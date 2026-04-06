@@ -68,6 +68,7 @@ export async function PUT(
     }
 
     const { code, userName, playerIds, publicMessage } = parsed.data;
+    const suppliedCode = code?.trim() ?? "";
 
     // Load entry
     const entry = await prisma.entry.findUnique({
@@ -81,31 +82,31 @@ export async function PUT(
       return NextResponse.json({ error: "Entry not found" }, { status: 404 });
     }
 
-    const isCommissioner = code === COMMISSIONER_CODE;
+    const isCommissioner = suppliedCode === COMMISSIONER_CODE;
 
-    // Verify personal edit code if not commissioner
-    if (!isCommissioner) {
-      if (!entry.editCodeHash) {
-        return NextResponse.json(
-          { error: "This entry has no personal code set. Contact the commissioner to make changes." },
-          { status: 403 }
-        );
-      }
-      if (!verifyCode(code, entry.editCodeHash)) {
-        return NextResponse.json(
-          { error: "Incorrect personal code." },
-          { status: 403 }
-        );
-      }
-    }
-
-    // Check lock — normal users blocked after lock, commissioner always allowed
+    // Check lock first — normal users blocked after lock, commissioner always allowed
     const settings = await prisma.contestSettings.findUnique({ where: { id: "main" } });
     if (!isCommissioner && isContestLocked(settings)) {
       return NextResponse.json(
         { error: "The contest is locked. Lineups can no longer be edited." },
         { status: 403 }
       );
+    }
+
+    // Verify personal edit code if not commissioner
+    if (!isCommissioner && entry.editCodeHash) {
+      if (!suppliedCode) {
+        return NextResponse.json(
+          { error: "Enter your personal code to edit this entry." },
+          { status: 403 }
+        );
+      }
+      if (!verifyCode(suppliedCode, entry.editCodeHash)) {
+        return NextResponse.json(
+          { error: "Incorrect personal code." },
+          { status: 403 }
+        );
+      }
     }
 
     // Build update payload

@@ -35,6 +35,16 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
   const [saveError, setSaveError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const initEntryForEditing = useCallback((entryData: EntryData) => {
+    setUserName(entryData.userName);
+    setPublicMessage(entryData.publicMessage ?? "");
+    const map = new Map<string, Player>();
+    for (const p of entryData.players) {
+      map.set(p.id, { id: p.id, name: p.name, salary: p.salary, isActive: true });
+    }
+    setSelectedMap(map);
+  }, []);
+
   useEffect(() => {
     Promise.all([
       fetch(`/api/entries/${id}`).then((r) => r.json()),
@@ -43,36 +53,24 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
     ]).then(([entryData, playerData, lbData]) => {
       if (entryData.error) { setStep("locked"); setLoading(false); return; }
 
-      setEntry(entryData.entry);
+      const loadedEntry = entryData.entry as EntryData;
+      setEntry(loadedEntry);
       setAllPlayers(playerData.players ?? []);
       setIsLocked(lbData.isLocked ?? false);
 
       if (lbData.isLocked) { setStep("locked"); }
+      else if (!loadedEntry.hasEditCode) {
+        initEntryForEditing(loadedEntry);
+        setStep("edit");
+      }
 
       setLoading(false);
     }).catch(() => { setStep("locked"); setLoading(false); });
-  }, [id]);
-
-  const initEdit = useCallback(() => {
-    if (!entry) return;
-    setUserName(entry.userName);
-    setPublicMessage(entry.publicMessage ?? "");
-    const map = new Map<string, Player>();
-    for (const p of entry.players) {
-      map.set(p.id, { id: p.id, name: p.name, salary: p.salary, isActive: true });
-    }
-    setSelectedMap(map);
-  }, [entry]);
+  }, [id, initEntryForEditing]);
 
   async function handleAuth() {
     setAuthError("");
     if (!code.trim()) { setAuthError("Enter your personal code or the commissioner code."); return; }
-
-    // Quick pre-check: if entry has no edit code set, only master code works
-    if (entry && !entry.hasEditCode && code !== "1110") {
-      setAuthError("This entry has no personal code. Use the commissioner code if you need to make changes.");
-      return;
-    }
 
     // Try a trivial edit to verify the code server-side
     const res = await fetch(`/api/entries/${id}`, {
@@ -92,7 +90,7 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
       return;
     }
 
-    initEdit();
+    if (entry) initEntryForEditing(entry);
     setStep("edit");
   }
 

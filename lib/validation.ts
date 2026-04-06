@@ -32,7 +32,12 @@ export const submitEntrySchema = z.object({
 export type SubmitEntryInput = z.infer<typeof submitEntrySchema>;
 
 export const editEntrySchema = z.object({
-  code: z.string().min(1, "Code is required"),
+  code: z
+    .string()
+    .trim()
+    .max(50, "Code must be 50 characters or fewer")
+    .optional()
+    .or(z.literal("")),
   userName: z
     .string()
     .trim()
