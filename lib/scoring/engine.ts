@@ -24,6 +24,7 @@ export interface PlayerScoreResult {
   thru: string | null;
   teeTime: string | null;
   isOnCourse: boolean;
+  isFinished: boolean;
   r1Pts: number;
   r2Pts: number;
   r3Pts: number;
@@ -176,9 +177,17 @@ export async function getLeaderboard(isLocked: boolean): Promise<EntryScoreResul
           const meta = getPlayerStatusMeta(stat?.rawStatPayload);
           const cleanPosition = stat?.position && stat.position !== "-" ? stat.position : null;
           const cleanThru = stat?.thru && stat.thru !== "0" ? stat.thru : null;
+          const thruNumber = cleanThru ? Number.parseInt(cleanThru, 10) : Number.NaN;
+          const isFinished =
+            meta.statusType === "STATUS_FINISHED" ||
+            cleanThru === "F" ||
+            (Number.isFinite(thruNumber) && thruNumber >= 18);
           const isOnCourse =
-            meta.statusType === "STATUS_IN_PROGRESS" ||
-            (cleanThru !== null && cleanThru !== "F");
+            !isFinished &&
+            (
+              meta.statusType === "STATUS_IN_PROGRESS" ||
+              (cleanThru !== null && cleanThru !== "F")
+            );
 
           return {
             playerId: ep.player.id,
@@ -187,6 +196,7 @@ export async function getLeaderboard(isLocked: boolean): Promise<EntryScoreResul
             thru: cleanThru,
             teeTime: meta.teeTime,
             isOnCourse,
+            isFinished,
             r1Pts: stat?.r1Pts ?? 0,
             r2Pts: stat?.r2Pts ?? 0,
             r3Pts: stat?.r3Pts ?? 0,

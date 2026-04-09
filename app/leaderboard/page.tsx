@@ -63,6 +63,10 @@ function formatTeeTime(teeTime: string | null): string | null {
 function formatPlayerStatus(player: PlayerScoreResult): string {
   const teeTimeLabel = formatTeeTime(player.teeTime);
 
+  if (player.isFinished) {
+    return player.position ? `${player.position} · F` : "F";
+  }
+
   if (!player.isOnCourse && teeTimeLabel) {
     return `Tees ${teeTimeLabel} ET`;
   }
@@ -196,6 +200,9 @@ function EntryRow({
   const onCoursePlayers = hasLineup
     ? entry.players.filter((player) => player.isOnCourse)
     : [];
+  const finishedPlayers = hasLineup
+    ? entry.players.filter((player) => player.isFinished)
+    : [];
 
   const roundScore = todayRound
     ? (entry[ROUND_SCORE_KEY[todayRound] as keyof typeof entry] as number)
@@ -236,12 +243,18 @@ function EntryRow({
           {rankBadge(rank)}
           <div className="min-w-0">
             {nameEl}
-            {onCoursePlayers.length > 0 && (
-              <p className="mt-0.5 text-xs text-gray-500">
+            {hasLineup && (
+              <p className="mt-0.5 text-xs leading-5 text-gray-500">
                 <span className="font-semibold text-masters-green">
-                  On course ({onCoursePlayers.length}):
-                </span>{" "}
-                {onCoursePlayers.map((player) => player.playerName).join(", ")}
+                  On course ({onCoursePlayers.length})
+                </span>
+                {onCoursePlayers.length > 0 && (
+                  <span>: {onCoursePlayers.map((player) => player.playerName).join(", ")}</span>
+                )}
+                <span className="mx-1.5 text-gray-300">•</span>
+                <span className="font-semibold text-gray-600">
+                  Finished ({finishedPlayers.length})
+                </span>
               </p>
             )}
           </div>
