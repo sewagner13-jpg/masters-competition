@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { LastUpdatedBanner } from "@/components/LastUpdatedBanner";
+import { LeaderboardChat } from "@/components/LeaderboardChat";
 import Link from "next/link";
 import type { EntryScoreResult, PlayerScoreResult } from "@/lib/scoring/engine";
 
@@ -70,6 +71,50 @@ function playerRoundPts(player: PlayerScoreResult, round: number | null): number
   if (round === 3) return player.r3Pts;
   if (round === 4) return player.r4Pts;
   return 0;
+}
+
+function entryDisplayScore(entry: EntryScoreResult, tab: ViewTab, todayRound: number | null) {
+  if (tab === "today" && todayRound) {
+    return entry[ROUND_SCORE_KEY[todayRound] as keyof EntryScoreResult] as number;
+  }
+
+  return entry.scoreOverall;
+}
+
+function TopLeadersCard({
+  entries,
+  tab,
+  todayRound,
+}: {
+  entries: EntryScoreResult[];
+  tab: ViewTab;
+  todayRound: number | null;
+}) {
+  const leaders = entries.slice(0, 5);
+
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-100 px-4 py-3">
+        <h2 className="text-lg font-bold text-masters-green">Top 5 Right Now</h2>
+        <p className="text-xs text-gray-500">
+          Quick snapshot so the leaders stay visible while chat is open.
+        </p>
+      </div>
+      <div className="divide-y divide-gray-100">
+        {leaders.map((entry, idx) => (
+          <div key={entry.entryId} className="flex items-center justify-between gap-3 px-4 py-3">
+            <div className="flex min-w-0 items-center gap-3">
+              {rankBadge(idx + 1)}
+              <span className="truncate text-sm font-semibold text-gray-900">{entry.userName}</span>
+            </div>
+            <span className="shrink-0 font-mono text-sm font-bold text-masters-green">
+              {fmt(entryDisplayScore(entry, tab, todayRound))}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 // ─── Entry row (with inline expandable picks) ────────────────────────────────
@@ -315,6 +360,13 @@ function LeaderboardContent() {
       {data?.isLocked && (
         <div className="mb-4 bg-masters-green/10 border border-masters-green/30 rounded-lg px-4 py-2 text-sm text-masters-green text-center">
           🔒 Contest is locked · Tap any entry to expand picks &amp; points
+        </div>
+      )}
+
+      {data && sortedEntries.length > 0 && (
+        <div className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(260px,0.85fr)]">
+          <LeaderboardChat />
+          <TopLeadersCard entries={sortedEntries} tab={tab} todayRound={todayRound} />
         </div>
       )}
 

@@ -113,3 +113,12 @@ model SyncRun {
   message        String?
   recordsUpdated Int       @default(0)
 }
+
+model ChatMessage {
+  id          String   @id @default(cuid())
+  displayName String
+  message     String
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
