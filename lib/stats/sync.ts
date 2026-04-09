@@ -25,8 +25,26 @@ export interface SyncResult {
  * ESPN returns accented names (e.g. "Ludvig Åberg", "Rasmus Højgaard") while
  * our Player table stores ASCII equivalents ("Ludvig Aberg", "Rasmus Hojgaard").
  */
+const PLAYER_NAME_ALIASES: Record<string, string> = {
+  "Ludvig Åberg": "Ludvig Aberg",
+  "Sergio García": "Sergio Garcia",
+  "José María Olazábal": "Jose Maria Olazabal",
+  "Ángel Cabrera": "Angel Cabrera",
+  "Sami Välimäki": "Sami Valimaki",
+  "Nicolai Højgaard": "Nicolai Hojgaard",
+  "Rasmus Højgaard": "Rasmus Hojgaard",
+  "Nico Echavarria": "Nicolas Echavarria",
+  "Johnny Keefer": "John Keefer",
+};
+
 function normalizeName(name: string): string {
-  return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  return name
+    .replace(/[øØ]/g, "o")
+    .replace(/[æÆ]/g, "ae")
+    .replace(/[œŒ]/g, "oe")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
 export async function runStatSync(options?: {
@@ -60,13 +78,15 @@ export async function runStatSync(options?: {
     let recordsUpdated = 0;
 
     for (const stat of stats) {
+      const aliasedName = PLAYER_NAME_ALIASES[stat.name] ?? stat.name;
+
       // Try exact match first, then normalized (ASCII) match for accented names
-      const normalizedStatName = normalizeName(stat.name);
+      const normalizedStatName = normalizeName(aliasedName);
       const player =
         (await prisma.player.findFirst({
-          where: { name: stat.name, isActive: true },
+          where: { name: aliasedName, isActive: true },
         })) ??
-        (normalizedStatName !== stat.name
+        (normalizedStatName !== aliasedName
           ? await prisma.player.findFirst({
               where: { name: normalizedStatName, isActive: true },
             })

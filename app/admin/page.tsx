@@ -459,6 +459,9 @@ export default function AdminPage() {
       {/* ── All Entries (scores) ── */}
       <section className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
         <h2 className="font-bold text-gray-800 mb-3">All Entries ({entries.length})</h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Open lineup edits from here or the protected list below. Locked entries can still be edited inside the admin panel.
+        </p>
         {entries.length === 0 ? (
           <p className="text-sm text-gray-400">No entries yet.</p>
         ) : (
@@ -485,7 +488,12 @@ export default function AdminPage() {
                     <td className="py-2 pr-2 text-right font-mono text-xs">{fmt(e.sundayBonusPoints)}</td>
                     <td className="py-2 pr-3 text-right font-mono font-bold text-masters-green">{fmt(e.score)}</td>
                     <td className="py-2">
-                      <a href={`/edit/${e.id}`} className="text-xs text-masters-green underline hover:text-green-800">Edit →</a>
+                      <button
+                        onClick={() => setEditingEntry(e)}
+                        className="text-xs text-masters-green underline hover:text-green-800"
+                      >
+                        Edit lineup →
+                      </button>
                     </td>
                   </tr>
                 ))}

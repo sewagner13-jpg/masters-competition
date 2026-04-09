@@ -71,12 +71,12 @@ interface EspnResponse {
  * simplified hole-distribution model (all under-par = birdies; all over-par = bogeys).
  *
  * Points per hole: birdie=3, par=0.5, bogey=-1
- * Baseline (18 pars): 9 pts
- * Under par: 9 + |score| × 2.5  (birdie upgrade = 3 − 0.5 = +2.5)
- * Over par:  9 − |score| × 1.5  (bogey downgrade = −1 − 0.5 = −1.5)
+ * Baseline = holes played × 0.5
+ * Under par: baseline + |score| × 2.5  (birdie upgrade = 3 − 0.5 = +2.5)
+ * Over par:  baseline − |score| × 1.5  (bogey downgrade = −1 − 0.5 = −1.5)
  */
-function roundScoreToPts(scoreToPar: number): number {
-  const baseline = 9; // 18 × 0.5
+function roundScoreToPts(scoreToPar: number, holesPlayed: number): number {
+  const baseline = holesPlayed * 0.5;
   if (scoreToPar < 0) return baseline + Math.abs(scoreToPar) * 2.5;
   if (scoreToPar > 0) return Math.max(0, baseline - scoreToPar * 1.5);
   return baseline;
@@ -131,12 +131,6 @@ export class EspnStatsProvider implements StatsProvider {
         const r3Raw = parseRoundScore(linescores[2]);
         const r4Raw = parseRoundScore(linescores[3]);
 
-        // Convert to fantasy points only for rounds that have been played
-        const r1Pts = r1Raw !== null ? roundScoreToPts(r1Raw) : null;
-        const r2Pts = r2Raw !== null ? roundScoreToPts(r2Raw) : null;
-        const r3Pts = r3Raw !== null ? roundScoreToPts(r3Raw) : null;
-        const r4Pts = r4Raw !== null ? roundScoreToPts(r4Raw) : null;
-
         // Position string: "T1", "1", "MC", "WD", "CUT"
         const position = c.status?.position?.displayName ?? null;
 
@@ -171,6 +165,21 @@ export class EspnStatsProvider implements StatsProvider {
           const n = parseInt(thru, 10);
           if (!isNaN(n)) holesCompleted = n;
         }
+
+        const pointsForRound = (scoreToPar: number | null, roundNumber: number): number | null => {
+          if (scoreToPar === null) return null;
+          const holesPlayed =
+            round === roundNumber
+              ? holesCompleted ?? 18
+              : 18;
+          return roundScoreToPts(scoreToPar, holesPlayed);
+        };
+
+        // Convert to fantasy points only for rounds that have been played
+        const r1Pts = pointsForRound(r1Raw, 1);
+        const r2Pts = pointsForRound(r2Raw, 2);
+        const r3Pts = pointsForRound(r3Raw, 3);
+        const r4Pts = pointsForRound(r4Raw, 4);
 
         // Total score to par (cumulative)
         const totalToPar = parseRelativeToPar(c.score?.displayValue);
