@@ -5,7 +5,7 @@
  * PlayerStatData with per-round fantasy points pre-computed.
  *
  * Fantasy point formula (approximation from round total when hole-by-hole is unavailable):
- *   Baseline = 18 holes × 0.5 (all pars) = 9 pts
+ *   Baseline = holes played × 0.5
  *   Under par: each stroke under par assumed birdie → +2.5 pts above baseline per stroke
  *   Over par:  each stroke over par assumed bogey  → −1.5 pts below baseline per stroke
  */
@@ -31,6 +31,7 @@ interface EspnStatus {
   displayValue?: string; // position: "1", "T3", "MC", "WD", "CUT"
   period?: number;       // current round number 1-4
   displayThru?: string;
+  teeTime?: string;
   thru?: number | { value?: number; displayValue?: string };
   position?: { displayName?: string };
   type?: { name?: string }; // "STATUS_IN_PROGRESS", "STATUS_FINISHED", etc.
@@ -113,6 +114,7 @@ export class EspnStatsProvider implements StatsProvider {
       .map((c): PlayerStatData => {
         const name = c.athlete!.displayName!;
         const linescores = c.linescores ?? [];
+        const statusType = c.status?.type?.name ?? null;
 
         /**
          * ESPN quirk: unplayed rounds still have a linescore entry with
@@ -132,20 +134,23 @@ export class EspnStatsProvider implements StatsProvider {
         const r4Raw = parseRoundScore(linescores[3]);
 
         // Position string: "T1", "1", "MC", "WD", "CUT"
-        const position = c.status?.position?.displayName ?? null;
+        const rawPosition = c.status?.position?.displayName ?? null;
+        const position = rawPosition && rawPosition !== "-" ? rawPosition : null;
 
         // "Thru" — check statistics array first, then status.thru
         let thru: string | null = null;
         const thruStat = c.statistics?.find((s) => s.name === "thru");
-        if (thruStat?.displayValue) {
+        if (statusType === "STATUS_SCHEDULED") {
+          thru = null;
+        } else if (thruStat?.displayValue) {
           thru = thruStat.displayValue;
         } else if (c.status?.displayThru) {
           thru = c.status.displayThru;
-        } else if (typeof c.status?.thru === "number") {
+        } else if (typeof c.status?.thru === "number" && c.status.thru > 0) {
           thru = String(c.status.thru);
         } else if (c.status?.thru && typeof c.status.thru === "object" && c.status.thru.displayValue) {
           thru = c.status.thru.displayValue;
-        } else if (c.status?.type?.name === "STATUS_FINISHED") {
+        } else if (statusType === "STATUS_FINISHED") {
           thru = "F";
         }
 

@@ -34,34 +34,33 @@ function rankBadge(rank: number) {
   return <span className={`${base} bg-gray-100 text-gray-500`}>{rank}</span>;
 }
 
-/**
- * Format a player's status for display.
- * ESPN sometimes returns an ISO datetime string in `position` as the tee time
- * for players who haven't started their round yet. Detect that and convert to
- * a readable Eastern Time string. Otherwise show position + thru as normal.
- */
-function formatPlayerStatus(position: string | null, thru: string | null): string {
-  // Detect ISO datetime tee time (e.g. "2026-04-09T17:44:00Z")
-  if (position && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(position)) {
-    try {
-      const date = new Date(position);
-      const timeET = date.toLocaleTimeString("en-US", {
-        timeZone: "America/New_York",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      });
-      return `Tees ${timeET} ET`;
-    } catch {
-      return position;
-    }
+function formatTeeTime(teeTime: string | null): string | null {
+  if (!teeTime) return null;
+
+  try {
+    const date = new Date(teeTime);
+    return date.toLocaleTimeString("en-US", {
+      timeZone: "America/New_York",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function formatPlayerStatus(player: PlayerScoreResult): string {
+  const teeTimeLabel = formatTeeTime(player.teeTime);
+
+  if (!player.isOnCourse && teeTimeLabel) {
+    return `Tees ${teeTimeLabel} ET`;
   }
 
-  // Normal leaderboard position + thru
-  if (!position && !thru) return "—";
-  let result = position ?? "—";
-  if (thru === "F") result += " · F";
-  else if (thru) result += ` · thru ${thru}`;
+  if (!player.position && !player.thru) return "—";
+  let result = player.position ?? "—";
+  if (player.thru === "F") result += " · F";
+  else if (player.thru) result += ` · thru ${player.thru}`;
   return result;
 }
 
@@ -91,6 +90,9 @@ function EntryRow({
   const [open, setOpen] = useState(false);
   const hasLineup = isLocked && entry.players.length > 0;
   const isGold = rank === 1;
+  const onCoursePlayers = hasLineup
+    ? entry.players.filter((player) => player.isOnCourse)
+    : [];
 
   const roundScore = todayRound
     ? (entry[ROUND_SCORE_KEY[todayRound] as keyof typeof entry] as number)
@@ -129,7 +131,17 @@ function EntryRow({
       <div className={`flex items-center justify-between px-4 py-3 ${isGold ? "bg-masters-gold/10" : "bg-gray-50"}`}>
         <div className="flex items-center gap-3">
           {rankBadge(rank)}
-          {nameEl}
+          <div className="min-w-0">
+            {nameEl}
+            {onCoursePlayers.length > 0 && (
+              <p className="mt-0.5 text-xs text-gray-500">
+                <span className="font-semibold text-masters-green">
+                  On course ({onCoursePlayers.length}):
+                </span>{" "}
+                {onCoursePlayers.map((player) => player.playerName).join(", ")}
+              </p>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {scoreDisplay}
@@ -145,7 +157,7 @@ function EntryRow({
           {/* Player rows */}
           <div className="divide-y divide-gray-50">
             {entry.players.map((player) => {
-              const status = formatPlayerStatus(player.position, player.thru);
+              const status = formatPlayerStatus(player);
               const isTeeTime = status.startsWith("Tees ");
               const isBlank = status === "—";
               const ptsToShow =

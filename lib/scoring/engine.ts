@@ -22,6 +22,8 @@ export interface PlayerScoreResult {
   playerName: string;
   position: string | null;
   thru: string | null;
+  teeTime: string | null;
+  isOnCourse: boolean;
   r1Pts: number;
   r2Pts: number;
   r3Pts: number;
@@ -41,6 +43,25 @@ export interface EntryScoreResult {
   sundayRepName: string | null;
   sundayTeamName: string | null;
   publicMessage: string | null;
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function getPlayerStatusMeta(rawPayload: unknown): {
+  teeTime: string | null;
+  statusType: string | null;
+} {
+  const payload = asObject(rawPayload);
+  const status = asObject(payload?.status);
+  const type = asObject(status?.type);
+
+  return {
+    teeTime: typeof status?.teeTime === "string" ? status.teeTime : null,
+    statusType: typeof type?.name === "string" ? type.name : null,
+  };
 }
 
 /** Recompute and persist scores for all active entries. Called after each sync. */
@@ -152,11 +173,20 @@ export async function getLeaderboard(isLocked: boolean): Promise<EntryScoreResul
     players: isLocked
       ? entry.players.map((ep) => {
           const stat = ep.player.stats[0];
+          const meta = getPlayerStatusMeta(stat?.rawStatPayload);
+          const cleanPosition = stat?.position && stat.position !== "-" ? stat.position : null;
+          const cleanThru = stat?.thru && stat.thru !== "0" ? stat.thru : null;
+          const isOnCourse =
+            meta.statusType === "STATUS_IN_PROGRESS" ||
+            (cleanThru !== null && cleanThru !== "F");
+
           return {
             playerId: ep.player.id,
             playerName: ep.player.name,
-            position: stat?.position ?? null,
-            thru: stat?.thru ?? null,
+            position: cleanPosition,
+            thru: cleanThru,
+            teeTime: meta.teeTime,
+            isOnCourse,
             r1Pts: stat?.r1Pts ?? 0,
             r2Pts: stat?.r2Pts ?? 0,
             r3Pts: stat?.r3Pts ?? 0,
