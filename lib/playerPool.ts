@@ -4,7 +4,8 @@ export interface PlayerPoolEntry {
   amateur?: boolean;
 }
 
-// 2026 Masters field aligned to the official invitees list qualified as of 2026-04-02.
+// 2026 Masters field — rebalanced salaries reflecting realistic win potential.
+// Source of truth for player pool. Run `npm run db:seed` after changes.
 export const PLAYER_POOL: PlayerPoolEntry[] = [
   { name: "Scottie Scheffler", salary: 11800 },
   { name: "Rory McIlroy", salary: 11500 },
