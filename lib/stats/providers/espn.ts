@@ -101,17 +101,31 @@ export class EspnStatsProvider implements StatsProvider {
         const name = c.athlete!.displayName!;
         const linescores = c.linescores ?? [];
 
-        // Per-round score to par (null if round not yet played)
-        const r1Raw = linescores[0]?.value ?? null;
-        const r2Raw = linescores[1]?.value ?? null;
-        const r3Raw = linescores[2]?.value ?? null;
-        const r4Raw = linescores[3]?.value ?? null;
+        /**
+         * ESPN quirk: unplayed rounds still have a linescore entry with
+         *   value: 0, displayValue: "-"
+         * A played round (even par) has:
+         *   value: 0, displayValue: "E" or a number
+         * We treat "-" displayValue as "not played" → null pts.
+         */
+        function parseRoundScore(ls: EspnLinkscore | undefined): number | null {
+          if (!ls) return null;
+          const dv = ls.displayValue ?? "";
+          if (dv === "-" || dv === "") return null; // not yet played
+          if (typeof ls.value === "number") return ls.value;
+          return null;
+        }
 
-        // Convert to fantasy points only for played rounds
-        const r1Pts = typeof r1Raw === "number" ? roundScoreToPts(r1Raw) : null;
-        const r2Pts = typeof r2Raw === "number" ? roundScoreToPts(r2Raw) : null;
-        const r3Pts = typeof r3Raw === "number" ? roundScoreToPts(r3Raw) : null;
-        const r4Pts = typeof r4Raw === "number" ? roundScoreToPts(r4Raw) : null;
+        const r1Raw = parseRoundScore(linescores[0]);
+        const r2Raw = parseRoundScore(linescores[1]);
+        const r3Raw = parseRoundScore(linescores[2]);
+        const r4Raw = parseRoundScore(linescores[3]);
+
+        // Convert to fantasy points only for rounds that have been played
+        const r1Pts = r1Raw !== null ? roundScoreToPts(r1Raw) : null;
+        const r2Pts = r2Raw !== null ? roundScoreToPts(r2Raw) : null;
+        const r3Pts = r3Raw !== null ? roundScoreToPts(r3Raw) : null;
+        const r4Pts = r4Raw !== null ? roundScoreToPts(r4Raw) : null;
 
         // Position string: "T1", "1", "MC", "WD", "CUT"
         const position = c.status?.displayValue ?? null;
@@ -186,7 +200,7 @@ export class EspnStatsProvider implements StatsProvider {
         const res = await fetch(url, {
           headers: { "User-Agent": "Mozilla/5.0 (compatible; SundayChurchMasters/1.0)" },
           signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-          next: { revalidate: 60 }, // Next.js 15 cache: revalidate every 60s
+          cache: "no-store", // always fetch fresh data — never cache
         });
 
         if (!res.ok) {

@@ -64,10 +64,10 @@ export function getStatsProvider(): StatsProvider {
       return new MockStatsProvider();
 
     case "espn": {
-      // Lazy import keeps ESPN code out of the mock bundle
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { EspnStatsProvider } = require("./providers/espn");
-      return new EspnStatsProvider() as StatsProvider;
+      // Direct import — works in Next.js ESM/Turbopack without require()
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { EspnStatsProvider } = require("./providers/espn") as typeof import("./providers/espn");
+      return new EspnStatsProvider();
     }
 
     default:
