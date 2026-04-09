@@ -35,6 +35,37 @@ function rankBadge(rank: number) {
 
 // ─── Entry Detail Modal (post-lock) ──────────────────────────────────────────
 
+/**
+ * Format a player's status for display.
+ * ESPN sometimes returns an ISO datetime string in `position` as the tee time
+ * for players who haven't started their round yet. Detect that and convert to
+ * a readable Eastern Time string. Otherwise show position + thru as normal.
+ */
+function formatPlayerStatus(position: string | null, thru: string | null): string {
+  // Detect ISO datetime tee time (e.g. "2026-04-09T17:44:00Z")
+  if (position && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(position)) {
+    try {
+      const date = new Date(position);
+      const timeET = date.toLocaleTimeString("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      return `Tees ${timeET} ET`;
+    } catch {
+      return position;
+    }
+  }
+
+  // Normal leaderboard position + thru
+  if (!position && !thru) return "—";
+  let result = position ?? "—";
+  if (thru && thru !== "F") result += ` · thru ${thru}`;
+  if (thru === "F") result += " · F";
+  return result;
+}
+
 function EntryDetailModal({ entry, onClose }: { entry: EntryScoreResult; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -51,15 +82,20 @@ function EntryDetailModal({ entry, onClose }: { entry: EntryScoreResult; onClose
         {entry.players.length > 0 && (
           <div className="mb-4">
             <h3 className="mb-2 text-xs font-semibold uppercase text-gray-500">Lineup</h3>
-            <div className="space-y-1">
-              {entry.players.map((player) => (
-                <div key={player.playerId} className="flex justify-between text-sm">
-                  <span className="font-medium">{player.playerName}</span>
-                  <span className="font-mono text-xs text-gray-500">
-                    {player.position ?? "--"}{player.thru ? ` (thru ${player.thru})` : ""}
-                  </span>
-                </div>
-              ))}
+            <div className="divide-y divide-gray-100">
+              {entry.players.map((player) => {
+                const status = formatPlayerStatus(player.position, player.thru);
+                const isTeeTime = status.startsWith("Tees ");
+                const isNotStarted = status === "—";
+                return (
+                  <div key={player.playerId} className="flex items-center justify-between py-2">
+                    <span className="font-medium text-sm text-gray-900">{player.playerName}</span>
+                    <span className={`text-sm ${isTeeTime ? "text-blue-600" : isNotStarted ? "text-gray-300" : "text-gray-500"}`}>
+                      {status}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
