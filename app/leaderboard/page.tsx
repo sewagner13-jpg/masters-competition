@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { LastUpdatedBanner } from "@/components/LastUpdatedBanner";
 import Link from "next/link";
-import type { EntryScoreResult } from "@/lib/scoring/engine";
+import type { EntryScoreResult, PlayerScoreResult } from "@/lib/scoring/engine";
 
 type ViewTab = "today" | "overall" | "projected";
 
@@ -15,7 +15,8 @@ interface LeaderboardResponse {
   lastSyncedAt: string | null;
 }
 
-const ROUND_LABELS: Record<number, string> = { 1: "Thursday", 2: "Friday", 3: "Saturday", 4: "Sunday" };
+const ROUND_LABELS: Record<number, string> = { 1: "Thu", 2: "Fri", 3: "Sat", 4: "Sun" };
+const ROUND_LABELS_LONG: Record<number, string> = { 1: "Thursday", 2: "Friday", 3: "Saturday", 4: "Sunday" };
 const ROUND_SCORE_KEY: Record<number, keyof EntryScoreResult> = {
   1: "scoreR1", 2: "scoreR2", 3: "scoreR3", 4: "scoreR4",
 };
@@ -32,8 +33,6 @@ function rankBadge(rank: number) {
   if (rank === 3) return <span className={`${base} bg-amber-600 text-white`}>3</span>;
   return <span className={`${base} bg-gray-100 text-gray-500`}>{rank}</span>;
 }
-
-// ─── Entry Detail Modal (post-lock) ──────────────────────────────────────────
 
 /**
  * Format a player's status for display.
@@ -61,98 +60,20 @@ function formatPlayerStatus(position: string | null, thru: string | null): strin
   // Normal leaderboard position + thru
   if (!position && !thru) return "—";
   let result = position ?? "—";
-  if (thru && thru !== "F") result += ` · thru ${thru}`;
   if (thru === "F") result += " · F";
+  else if (thru) result += ` · thru ${thru}`;
   return result;
 }
 
-function EntryDetailModal({ entry, onClose }: { entry: EntryScoreResult; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-start justify-between">
-          <h2 className="text-lg font-bold text-masters-green">{entry.userName}</h2>
-          <button onClick={onClose} className="text-2xl leading-none text-gray-400 hover:text-gray-600">×</button>
-        </div>
-
-        {/* Golfers */}
-        {entry.players.length > 0 && (
-          <div className="mb-4">
-            <h3 className="mb-2 text-xs font-semibold uppercase text-gray-500">Lineup</h3>
-            <div className="divide-y divide-gray-100">
-              {entry.players.map((player) => {
-                const status = formatPlayerStatus(player.position, player.thru);
-                const isTeeTime = status.startsWith("Tees ");
-                const isNotStarted = status === "—";
-                return (
-                  <div key={player.playerId} className="flex items-center justify-between py-2">
-                    <span className="font-medium text-sm text-gray-900">{player.playerName}</span>
-                    <span className={`text-sm ${isTeeTime ? "text-blue-600" : isNotStarted ? "text-gray-300" : "text-gray-500"}`}>
-                      {status}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Sunday info */}
-        {(entry.sundayRepName || entry.sundayTeamName) && (
-          <div className="border-t pt-3 mb-3">
-            <h3 className="mb-2 text-xs font-semibold uppercase text-gray-500">Sunday</h3>
-            {entry.sundayRepName && (
-              <p className="text-sm"><span className="text-gray-500">Rep: </span><span className="font-medium">{entry.sundayRepName}</span></p>
-            )}
-            {entry.sundayTeamName && (
-              <p className="text-sm mt-0.5"><span className="text-gray-500">Team: </span><span className="font-medium">{entry.sundayTeamName}</span></p>
-            )}
-          </div>
-        )}
-
-        {/* Public message */}
-        {entry.publicMessage && (
-          <div className="border-t pt-3 mb-3">
-            <h3 className="mb-1 text-xs font-semibold uppercase text-gray-500">Message</h3>
-            <p className="text-sm italic text-gray-700">&ldquo;{entry.publicMessage}&rdquo;</p>
-          </div>
-        )}
-
-        {/* Score breakdown */}
-        <div className="border-t pt-3">
-          <h3 className="mb-2 text-xs font-semibold uppercase text-gray-500">Scores</h3>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-            {[1, 2, 3, 4].map((round) => {
-              const key = ROUND_SCORE_KEY[round] as keyof typeof entry;
-              const pts = entry[key] as number;
-              return (
-                <div key={round} className="flex justify-between">
-                  <span className="text-gray-500">{ROUND_LABELS[round]}</span>
-                  <span className="font-mono font-semibold">{fmt(pts)}</span>
-                </div>
-              );
-            })}
-            {entry.sundayBonusPoints !== 0 && (
-              <div className="col-span-2 flex justify-between">
-                <span className="text-gray-500">Sunday Bonus</span>
-                <span className="font-mono font-semibold">{fmt(entry.sundayBonusPoints)}</span>
-              </div>
-            )}
-            <div className="col-span-2 flex justify-between border-t pt-1 font-bold">
-              <span>Overall</span>
-              <span className="font-mono">{fmt(entry.scoreOverall)}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+function playerRoundPts(player: PlayerScoreResult, round: number | null): number {
+  if (round === 1) return player.r1Pts;
+  if (round === 2) return player.r2Pts;
+  if (round === 3) return player.r3Pts;
+  if (round === 4) return player.r4Pts;
+  return 0;
 }
 
-// ─── Entry row ───────────────────────────────────────────────────────────────
+// ─── Entry row (with inline expandable picks) ────────────────────────────────
 
 function EntryRow({
   entry,
@@ -160,25 +81,26 @@ function EntryRow({
   tab,
   todayRound,
   isLocked,
-  onClick,
 }: {
   entry: EntryScoreResult;
   rank: number;
   tab: ViewTab;
   todayRound: number | null;
   isLocked: boolean;
-  onClick: () => void;
 }) {
-  const roundScore =
-    todayRound ? (entry[ROUND_SCORE_KEY[todayRound] as keyof typeof entry] as number) : 0;
-
+  const [open, setOpen] = useState(false);
+  const hasLineup = isLocked && entry.players.length > 0;
   const isGold = rank === 1;
+
+  const roundScore = todayRound
+    ? (entry[ROUND_SCORE_KEY[todayRound] as keyof typeof entry] as number)
+    : 0;
 
   const scoreDisplay =
     tab === "today" && todayRound ? (
-      <div>
+      <div className="text-right">
         <span className="text-base font-bold font-mono text-masters-green">{fmt(roundScore)}</span>
-        <span className="text-xs text-gray-400 ml-2">({fmt(entry.scoreOverall)} overall)</span>
+        <span className="text-xs text-gray-400 ml-1.5">({fmt(entry.scoreOverall)})</span>
       </div>
     ) : (
       <span className="text-lg font-bold font-mono text-masters-green">{fmt(entry.scoreOverall)}</span>
@@ -198,18 +120,101 @@ function EntryRow({
 
   return (
     <div
-      className={`overflow-hidden rounded-xl border bg-white shadow-sm ${
-        isLocked ? "cursor-pointer hover:shadow-md transition-shadow" : ""
+      className={`overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow ${
+        hasLineup ? "cursor-pointer hover:shadow-md" : ""
       } ${isGold ? "border-masters-gold" : "border-gray-200"}`}
-      onClick={isLocked ? onClick : undefined}
+      onClick={hasLineup ? () => setOpen((o) => !o) : undefined}
     >
+      {/* ── Header row ── */}
       <div className={`flex items-center justify-between px-4 py-3 ${isGold ? "bg-masters-gold/10" : "bg-gray-50"}`}>
         <div className="flex items-center gap-3">
           {rankBadge(rank)}
           {nameEl}
         </div>
-        <div className="text-right">{scoreDisplay}</div>
+        <div className="flex items-center gap-2">
+          {scoreDisplay}
+          {hasLineup && (
+            <span className="text-gray-400 text-xs w-3 shrink-0">{open ? "▲" : "▼"}</span>
+          )}
+        </div>
       </div>
+
+      {/* ── Inline player breakdown ── */}
+      {open && hasLineup && (
+        <div className="px-4 pt-2 pb-3 bg-white">
+          {/* Player rows */}
+          <div className="divide-y divide-gray-50">
+            {entry.players.map((player) => {
+              const status = formatPlayerStatus(player.position, player.thru);
+              const isTeeTime = status.startsWith("Tees ");
+              const isBlank = status === "—";
+              const ptsToShow =
+                tab === "today" && todayRound
+                  ? playerRoundPts(player, todayRound)
+                  : player.r1Pts + player.r2Pts + player.r3Pts + player.r4Pts;
+
+              return (
+                <div
+                  key={player.playerId}
+                  className="grid items-center py-1.5"
+                  style={{ gridTemplateColumns: "1fr auto auto" }}
+                >
+                  <span className="text-sm text-gray-800 font-medium truncate pr-2">
+                    {player.playerName}
+                  </span>
+                  <span
+                    className={`text-xs mr-3 whitespace-nowrap ${
+                      isTeeTime ? "text-blue-500" : isBlank ? "text-gray-300" : "text-gray-400"
+                    }`}
+                  >
+                    {status}
+                  </span>
+                  <span className="text-sm font-semibold text-masters-green text-right w-12">
+                    {fmt(ptsToShow)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Round totals strip */}
+          <div className="mt-2 pt-2 border-t border-gray-100 grid grid-cols-4 gap-1">
+            {[1, 2, 3, 4].map((r) => {
+              const pts = entry[ROUND_SCORE_KEY[r] as keyof typeof entry] as number;
+              const isToday = r === todayRound;
+              return (
+                <div key={r} className="text-center">
+                  <div className={`text-[10px] uppercase tracking-wide ${isToday ? "text-masters-green font-semibold" : "text-gray-400"}`}>
+                    {ROUND_LABELS[r]}
+                  </div>
+                  <div className={`text-sm font-semibold ${isToday ? "text-masters-green" : "text-gray-600"}`}>
+                    {fmt(pts)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Sunday + message (if present) */}
+          {(entry.sundayRepName || entry.sundayTeamName || entry.publicMessage) && (
+            <div className="mt-2 pt-2 border-t border-gray-100 space-y-0.5">
+              {entry.sundayRepName && (
+                <p className="text-xs text-gray-500">
+                  <span className="font-medium text-gray-600">Sunday rep:</span> {entry.sundayRepName}
+                </p>
+              )}
+              {entry.sundayTeamName && (
+                <p className="text-xs text-gray-500">
+                  <span className="font-medium text-gray-600">Sunday team:</span> {entry.sundayTeamName}
+                </p>
+              )}
+              {entry.publicMessage && (
+                <p className="text-xs text-gray-500 italic">&ldquo;{entry.publicMessage}&rdquo;</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -226,7 +231,6 @@ function LeaderboardContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<ViewTab>("today");
-  const [selectedEntry, setSelectedEntry] = useState<EntryScoreResult | null>(null);
 
   const fetchLeaderboard = useCallback(() => {
     fetch("/api/leaderboard")
@@ -246,16 +250,15 @@ function LeaderboardContent() {
   }, [fetchLeaderboard]);
 
   const todayRound = data?.activeRound ?? null;
-  const todayLabel = todayRound ? ROUND_LABELS[todayRound] : null;
+  const todayLabel = todayRound ? ROUND_LABELS_LONG[todayRound] : null;
 
-  // Sort for the active tab
   const sortedEntries = data
     ? [...data.leaderboard].sort((a, b) => {
         if (tab === "today" && todayRound) {
           const key = ROUND_SCORE_KEY[todayRound] as keyof EntryScoreResult;
           return (b[key] as number) - (a[key] as number);
         }
-        return b.scoreOverall - a.scoreOverall; // overall + projected both sort by overall
+        return b.scoreOverall - a.scoreOverall;
       })
     : [];
 
@@ -299,7 +302,7 @@ function LeaderboardContent() {
       )}
       {data?.isLocked && (
         <div className="mb-4 bg-masters-green/10 border border-masters-green/30 rounded-lg px-4 py-2 text-sm text-masters-green text-center">
-          🔒 Contest is locked · Lineups are final · Tap any entry to see its full lineup
+          🔒 Contest is locked · Tap any entry to expand picks &amp; points
         </div>
       )}
 
@@ -354,12 +357,11 @@ function LeaderboardContent() {
               tab={tab}
               todayRound={todayRound}
               isLocked={data.isLocked}
-              onClick={() => setSelectedEntry(entry)}
             />
           ))}
           <p className="mt-2 text-center text-xs text-gray-400">
             {data.isLocked
-              ? "Tap an entry to see the full lineup."
+              ? "Tap any entry to expand picks and scores."
               : "Click your name to edit your lineup before the deadline."}
           </p>
         </div>
@@ -370,11 +372,6 @@ function LeaderboardContent() {
           Build Your Lineup
         </Link>
       </div>
-
-      {/* Post-lock detail modal */}
-      {data?.isLocked && selectedEntry && (
-        <EntryDetailModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
-      )}
     </div>
   );
 }
