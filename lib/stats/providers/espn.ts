@@ -30,7 +30,9 @@ interface EspnStatistic {
 interface EspnStatus {
   displayValue?: string; // position: "1", "T3", "MC", "WD", "CUT"
   period?: number;       // current round number 1-4
-  thru?: { value?: number; displayValue?: string };
+  displayThru?: string;
+  thru?: number | { value?: number; displayValue?: string };
+  position?: { displayName?: string };
   type?: { name?: string }; // "STATUS_IN_PROGRESS", "STATUS_FINISHED", etc.
 }
 
@@ -80,6 +82,17 @@ function roundScoreToPts(scoreToPar: number): number {
   return baseline;
 }
 
+function parseRelativeToPar(raw: string | undefined): number | null {
+  if (!raw) return null;
+
+  const value = raw.trim().toUpperCase();
+  if (value === "-" || value === "") return null;
+  if (value === "E") return 0;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 // ─── ESPN Stats Provider ──────────────────────────────────────────────────────
 
 export class EspnStatsProvider implements StatsProvider {
@@ -110,10 +123,7 @@ export class EspnStatsProvider implements StatsProvider {
          */
         function parseRoundScore(ls: EspnLinkscore | undefined): number | null {
           if (!ls) return null;
-          const dv = ls.displayValue ?? "";
-          if (dv === "-" || dv === "") return null; // not yet played
-          if (typeof ls.value === "number") return ls.value;
-          return null;
+          return parseRelativeToPar(ls.displayValue);
         }
 
         const r1Raw = parseRoundScore(linescores[0]);
@@ -128,15 +138,21 @@ export class EspnStatsProvider implements StatsProvider {
         const r4Pts = r4Raw !== null ? roundScoreToPts(r4Raw) : null;
 
         // Position string: "T1", "1", "MC", "WD", "CUT"
-        const position = c.status?.displayValue ?? null;
+        const position = c.status?.position?.displayName ?? null;
 
         // "Thru" — check statistics array first, then status.thru
         let thru: string | null = null;
         const thruStat = c.statistics?.find((s) => s.name === "thru");
         if (thruStat?.displayValue) {
           thru = thruStat.displayValue;
-        } else if (c.status?.thru?.displayValue) {
+        } else if (c.status?.displayThru) {
+          thru = c.status.displayThru;
+        } else if (typeof c.status?.thru === "number") {
+          thru = String(c.status.thru);
+        } else if (c.status?.thru && typeof c.status.thru === "object" && c.status.thru.displayValue) {
           thru = c.status.thru.displayValue;
+        } else if (c.status?.type?.name === "STATUS_FINISHED") {
+          thru = "F";
         }
 
         // Current round (1-4) from status.period or inferred from linescores length
@@ -157,8 +173,7 @@ export class EspnStatsProvider implements StatsProvider {
         }
 
         // Total score to par (cumulative)
-        const totalToPar =
-          typeof c.score?.value === "number" ? c.score.value : null;
+        const totalToPar = parseRelativeToPar(c.score?.displayValue);
 
         return {
           name,
