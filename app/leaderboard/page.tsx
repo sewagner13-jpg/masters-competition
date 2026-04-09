@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { LastUpdatedBanner } from "@/components/LastUpdatedBanner";
 import { LeaderboardChat } from "@/components/LeaderboardChat";
+import { BUY_IN } from "@/lib/constants";
 import Link from "next/link";
 import type { EntryScoreResult, PlayerScoreResult } from "@/lib/scoring/engine";
 
@@ -21,10 +22,18 @@ const ROUND_LABELS_LONG: Record<number, string> = { 1: "Thursday", 2: "Friday", 
 const ROUND_SCORE_KEY: Record<number, keyof EntryScoreResult> = {
   1: "scoreR1", 2: "scoreR2", 3: "scoreR3", 4: "scoreR4",
 };
+const DAILY_PAYOUT_PCTS = [0.075, 0.025];
 
 function fmt(pts: number) {
   if (pts === 0) return "0";
   return pts > 0 ? `+${pts.toFixed(1)}` : pts.toFixed(1);
+}
+
+function usd(amount: number) {
+  return `$${amount.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function rankBadge(rank: number) {
@@ -81,6 +90,43 @@ function entryDisplayScore(entry: EntryScoreResult, tab: ViewTab, todayRound: nu
   return entry.scoreOverall;
 }
 
+function getDailyPayoutMap(entries: EntryScoreResult[], todayRound: number | null) {
+  const payoutMap = new Map<string, number>();
+
+  if (!todayRound || entries.length === 0) return payoutMap;
+
+  const pot = entries.length * BUY_IN;
+  const dailyPayouts = DAILY_PAYOUT_PCTS.map((pct) => pot * pct);
+  let idx = 0;
+
+  while (idx < entries.length) {
+    const groupScore = entryDisplayScore(entries[idx], "today", todayRound);
+    let end = idx + 1;
+
+    while (
+      end < entries.length &&
+      Math.abs(entryDisplayScore(entries[end], "today", todayRound) - groupScore) < 1e-9
+    ) {
+      end += 1;
+    }
+
+    const occupiedRanks = Array.from({ length: end - idx }, (_, offset) => idx + offset + 1);
+    const pooledPayout = occupiedRanks.reduce(
+      (sum, rank) => sum + (dailyPayouts[rank - 1] ?? 0),
+      0
+    );
+    const eachPayout = pooledPayout / (end - idx);
+
+    for (let cursor = idx; cursor < end; cursor += 1) {
+      payoutMap.set(entries[cursor].entryId, eachPayout);
+    }
+
+    idx = end;
+  }
+
+  return payoutMap;
+}
+
 function TopLeadersCard({
   entries,
   tab,
@@ -91,6 +137,7 @@ function TopLeadersCard({
   todayRound: number | null;
 }) {
   const leaders = entries.slice(0, 5);
+  const dailyPayoutMap = tab === "today" ? getDailyPayoutMap(entries, todayRound) : new Map<string, number>();
 
   return (
     <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -98,20 +145,31 @@ function TopLeadersCard({
         <h2 className="text-lg font-bold text-masters-green">Top 5 Right Now</h2>
         <p className="text-xs text-gray-500">
           Quick snapshot so the leaders stay visible while chat is open.
+          {tab === "today" && " Today payouts update live with the daily standings."}
         </p>
       </div>
       <div className="divide-y divide-gray-100">
-        {leaders.map((entry, idx) => (
+        {leaders.map((entry, idx) => {
+          const dailyPayout = dailyPayoutMap.get(entry.entryId) ?? 0;
+
+          return (
           <div key={entry.entryId} className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex min-w-0 items-center gap-3">
               {rankBadge(idx + 1)}
               <span className="truncate text-sm font-semibold text-gray-900">{entry.userName}</span>
             </div>
-            <span className="shrink-0 font-mono text-sm font-bold text-masters-green">
-              {fmt(entryDisplayScore(entry, tab, todayRound))}
-            </span>
+            <div className="shrink-0 text-right">
+              <div className="font-mono text-sm font-bold text-masters-green">
+                {fmt(entryDisplayScore(entry, tab, todayRound))}
+              </div>
+              {tab === "today" && (
+                <div className={`text-[11px] font-semibold ${dailyPayout > 0 ? "text-amber-700" : "text-gray-400"}`}>
+                  {dailyPayout > 0 ? `Today ${usd(dailyPayout)}` : "Today —"}
+                </div>
+              )}
+            </div>
           </div>
-        ))}
+        )})}
       </div>
     </section>
   );
