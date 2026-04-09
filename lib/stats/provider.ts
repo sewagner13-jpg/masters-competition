@@ -56,6 +56,9 @@ export class MockStatsProvider implements StatsProvider {
 // ------------------------------------------------------------------
 // Factory — returns the right provider based on env config
 // ------------------------------------------------------------------
+// Top-level import so Next.js/Turbopack bundles it correctly (no require() in ESM)
+import { EspnStatsProvider } from "./providers/espn";
+
 export function getStatsProvider(): StatsProvider {
   const provider = process.env.MASTERS_STATS_PROVIDER ?? "mock";
 
@@ -63,12 +66,8 @@ export function getStatsProvider(): StatsProvider {
     case "mock":
       return new MockStatsProvider();
 
-    case "espn": {
-      // Direct import — works in Next.js ESM/Turbopack without require()
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { EspnStatsProvider } = require("./providers/espn") as typeof import("./providers/espn");
+    case "espn":
       return new EspnStatsProvider();
-    }
 
     default:
       console.warn(`[stats] Unknown provider "${provider}", falling back to mock`);
