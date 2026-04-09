@@ -20,6 +20,15 @@ export interface SyncResult {
   recordsUpdated: number;
 }
 
+/**
+ * Normalize a player name for DB lookup by stripping diacritics.
+ * ESPN returns accented names (e.g. "Ludvig Åberg", "Rasmus Højgaard") while
+ * our Player table stores ASCII equivalents ("Ludvig Aberg", "Rasmus Hojgaard").
+ */
+function normalizeName(name: string): string {
+  return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+
 export async function runStatSync(options?: {
   forceSync?: boolean; // bypass time window check (for manual admin trigger)
 }): Promise<SyncResult> {
@@ -51,9 +60,17 @@ export async function runStatSync(options?: {
     let recordsUpdated = 0;
 
     for (const stat of stats) {
-      const player = await prisma.player.findFirst({
-        where: { name: stat.name, isActive: true },
-      });
+      // Try exact match first, then normalized (ASCII) match for accented names
+      const normalizedStatName = normalizeName(stat.name);
+      const player =
+        (await prisma.player.findFirst({
+          where: { name: stat.name, isActive: true },
+        })) ??
+        (normalizedStatName !== stat.name
+          ? await prisma.player.findFirst({
+              where: { name: normalizedStatName, isActive: true },
+            })
+          : null);
 
       if (!player) continue;
 

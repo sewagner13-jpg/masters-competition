@@ -32,5 +32,5 @@ export default async function handler() {
 }
 
 export const config: Config = {
-  schedule: "0,15,30,45 * * * *", // every 15 minutes
+  schedule: "* * * * *", // every minute — live scoring during Masters week
 };
