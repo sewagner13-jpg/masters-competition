@@ -5,6 +5,7 @@ import { PlayerTable, type Player } from "@/components/PlayerTable";
 import { RosterBuilder } from "@/components/RosterBuilder";
 import { SalaryTracker } from "@/components/SalaryTracker";
 import { ROSTER_SIZE, SALARY_CAP, BUY_IN } from "@/lib/constants";
+import { PAYOUT_STRUCTURE } from "@/lib/payouts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,21 +88,6 @@ function PayoutCalculator({ entryCount }: { entryCount: number }) {
   const n = customCount !== "" ? Math.max(0, parseInt(customCount) || 0) : entryCount;
   const pot = n * BUY_IN;
 
-  const structure = [
-    { label: "Thu — 1st place", pct: 0.075, bucket: "Daily (×4)" },
-    { label: "Thu — 2nd place", pct: 0.025, bucket: "Daily (×4)" },
-    { label: "Fri — 1st place", pct: 0.075, bucket: "Daily (×4)" },
-    { label: "Fri — 2nd place", pct: 0.025, bucket: "Daily (×4)" },
-    { label: "Sat — 1st place", pct: 0.075, bucket: "Daily (×4)" },
-    { label: "Sat — 2nd place", pct: 0.025, bucket: "Daily (×4)" },
-    { label: "Sun — 1st place", pct: 0.075, bucket: "Daily (×4)" },
-    { label: "Sun — 2nd place", pct: 0.025, bucket: "Daily (×4)" },
-    { label: "Overall — 1st", pct: 0.30, bucket: "Overall" },
-    { label: "Overall — 2nd", pct: 0.15, bucket: "Overall" },
-    { label: "Overall — 3rd", pct: 0.10, bucket: "Overall" },
-    { label: "Last place", pct: 0.05, bucket: "Overall" },
-  ];
-
   return (
     <div>
       <p className="text-xs text-gray-500 mb-3">
@@ -135,8 +121,8 @@ function PayoutCalculator({ entryCount }: { entryCount: number }) {
             </tr>
           </thead>
           <tbody>
-            {structure.map((row, i) => {
-              const prevBucket = i > 0 ? structure[i - 1].bucket : null;
+            {PAYOUT_STRUCTURE.map((row, i) => {
+              const prevBucket = i > 0 ? PAYOUT_STRUCTURE[i - 1].bucket : null;
               const showBucket = row.bucket !== prevBucket;
               return (
                 <tr key={row.label} className={`border-b border-gray-50 ${showBucket && i > 0 ? "border-t border-gray-200" : ""}`}>

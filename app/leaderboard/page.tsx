@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { LastUpdatedBanner } from "@/components/LastUpdatedBanner";
 import { LeaderboardChat } from "@/components/LeaderboardChat";
-import { BUY_IN } from "@/lib/constants";
+import { PrizeMoneyTable } from "@/components/PrizeMoneyTable";
+import { getDailyPayoutMap, getPrizeMoneySummary } from "@/lib/payouts";
 import Link from "next/link";
 import type { EntryScoreResult, PlayerScoreResult } from "@/lib/scoring/engine";
 
@@ -22,7 +23,6 @@ const ROUND_LABELS_LONG: Record<number, string> = { 1: "Thursday", 2: "Friday", 
 const ROUND_SCORE_KEY: Record<number, keyof EntryScoreResult> = {
   1: "scoreR1", 2: "scoreR2", 3: "scoreR3", 4: "scoreR4",
 };
-const DAILY_PAYOUT_PCTS = [0.075, 0.025];
 
 function fmt(pts: number) {
   if (pts === 0) return "0";
@@ -94,43 +94,6 @@ function entryDisplayScore(entry: EntryScoreResult, tab: ViewTab, todayRound: nu
   return entry.scoreOverall;
 }
 
-function getDailyPayoutMap(entries: EntryScoreResult[], todayRound: number | null) {
-  const payoutMap = new Map<string, number>();
-
-  if (!todayRound || entries.length === 0) return payoutMap;
-
-  const pot = entries.length * BUY_IN;
-  const dailyPayouts = DAILY_PAYOUT_PCTS.map((pct) => pot * pct);
-  let idx = 0;
-
-  while (idx < entries.length) {
-    const groupScore = entryDisplayScore(entries[idx], "today", todayRound);
-    let end = idx + 1;
-
-    while (
-      end < entries.length &&
-      Math.abs(entryDisplayScore(entries[end], "today", todayRound) - groupScore) < 1e-9
-    ) {
-      end += 1;
-    }
-
-    const occupiedRanks = Array.from({ length: end - idx }, (_, offset) => idx + offset + 1);
-    const pooledPayout = occupiedRanks.reduce(
-      (sum, rank) => sum + (dailyPayouts[rank - 1] ?? 0),
-      0
-    );
-    const eachPayout = pooledPayout / (end - idx);
-
-    for (let cursor = idx; cursor < end; cursor += 1) {
-      payoutMap.set(entries[cursor].entryId, eachPayout);
-    }
-
-    idx = end;
-  }
-
-  return payoutMap;
-}
-
 function TopLeadersCard({
   entries,
   tab,
@@ -141,7 +104,7 @@ function TopLeadersCard({
   todayRound: number | null;
 }) {
   const leaders = entries.slice(0, 5);
-  const dailyPayoutMap = tab === "today" ? getDailyPayoutMap(entries, todayRound) : new Map<string, number>();
+  const dailyPayoutMap = tab === "today" ? getDailyPayoutMap(entries, todayRound as 1 | 2 | 3 | 4 | null) : new Map<string, number>();
 
   return (
     <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -379,6 +342,9 @@ function LeaderboardContent() {
 
   const todayRound = data?.activeRound ?? null;
   const todayLabel = todayRound ? ROUND_LABELS_LONG[todayRound] : null;
+  const prizeMoneySummary = data
+    ? getPrizeMoneySummary(data.leaderboard, todayRound)
+    : null;
 
   const sortedEntries = data
     ? [...data.leaderboard].sort((a, b) => {
@@ -438,6 +404,19 @@ function LeaderboardContent() {
         <div className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(260px,0.85fr)]">
           <LeaderboardChat />
           <TopLeadersCard entries={sortedEntries} tab={tab} todayRound={todayRound} />
+        </div>
+      )}
+
+      {prizeMoneySummary && (
+        <div className="mb-5">
+          <PrizeMoneyTable
+            rows={prizeMoneySummary.rows}
+            liveTodayRound={prizeMoneySummary.liveTodayRound}
+            title="Money Race"
+            subtitle="Won = completed daily payouts. Live total also includes the current day and the current overall payout spots if the tournament ended right now."
+            limit={5}
+            compact
+          />
         </div>
       )}
 

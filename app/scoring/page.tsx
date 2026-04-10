@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LivePrizeMoneySection } from "@/components/LivePrizeMoneySection";
 import {
   QUICK_RULE_CALLOUTS,
   MASTERS_SCORING_COPY,
@@ -186,6 +187,23 @@ export default function ScoringPage() {
               </div>
             </div>
           </div>
+        </section>
+
+        <section className="grid gap-4">
+          <div className="rounded-2xl border border-masters-green/10 bg-white p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-masters-gold">
+              Prize Money
+            </p>
+            <h2 className="mt-3 text-2xl font-serif font-bold text-masters-green">
+              Live money leaderboard
+            </h2>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-700">
+              This board shows what has already been won, what the current day is worth right now,
+              and what each entry is sitting on in the overall race if the standings held.
+            </p>
+          </div>
+
+          <LivePrizeMoneySection />
         </section>
       </div>
     </div>
