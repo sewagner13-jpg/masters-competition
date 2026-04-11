@@ -1,25 +1,47 @@
 /**
- * ESPN Stats Provider — Masters Tournament
+ * ESPN Stats Provider - Masters Tournament
  *
- * Fetches live leaderboard data from ESPN's public golf API and maps it to
- * PlayerStatData with per-round fantasy points pre-computed.
- *
- * Fantasy point formula (approximation from round total when hole-by-hole is unavailable):
- *   Baseline = holes played × 0.5
- *   Under par: each stroke under par assumed birdie → +2.5 pts above baseline per stroke
- *   Over par:  each stroke over par assumed bogey  → −1.5 pts below baseline per stroke
+ * Pulls the public leaderboard plus each competitor's scorecard summary.
+ * When ESPN exposes hole-by-hole data, we compute exact round fantasy points
+ * from the real hole results. If a summary fetch fails, we fall back to the
+ * older score-to-par approximation so sync can still complete.
  */
 
+import { HOLE_POINTS, holeScoreToPoints } from "@/lib/scoring/config";
 import type { StatsProvider, PlayerStatData } from "../provider";
 
 const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard";
+const ESPN_SUMMARY_BASE = "https://site.web.api.espn.com/apis/site/v2/sports/golf";
+const ESPN_TOUR = "pga";
 const FETCH_TIMEOUT_MS = 12_000;
+const SUMMARY_FETCH_CONCURRENCY = 12;
 
-// ─── ESPN API types (partial — only fields we use) ───────────────────────────
+// ESPN API types (partial - only fields we use)
 
 interface EspnLinkscore {
   value?: number;
   displayValue?: string;
+}
+
+interface EspnHoleScoreType {
+  name?: string;
+  displayName?: string;
+  displayValue?: string;
+}
+
+interface EspnRoundHole {
+  value?: number;
+  displayValue?: string;
+  period?: number;
+  par?: number;
+  scoreType?: EspnHoleScoreType;
+}
+
+interface EspnSummaryRound {
+  value?: number;
+  displayValue?: string;
+  period?: number;
+  linescores?: EspnRoundHole[];
 }
 
 interface EspnStatistic {
@@ -28,13 +50,13 @@ interface EspnStatistic {
 }
 
 interface EspnStatus {
-  displayValue?: string; // position: "1", "T3", "MC", "WD", "CUT"
-  period?: number;       // current round number 1-4
+  displayValue?: string;
+  period?: number;
   displayThru?: string;
   teeTime?: string;
   thru?: number | { value?: number; displayValue?: string };
   position?: { displayName?: string };
-  type?: { name?: string }; // "STATUS_IN_PROGRESS", "STATUS_FINISHED", etc.
+  type?: { name?: string };
 }
 
 interface EspnAthlete {
@@ -65,16 +87,19 @@ interface EspnResponse {
   events?: EspnEvent[];
 }
 
-// ─── Fantasy point approximation ─────────────────────────────────────────────
+interface EspnCompetitorSummaryResponse {
+  competitor?: { id?: string };
+  rounds?: EspnSummaryRound[];
+}
 
 /**
  * Converts a round score-to-par to approximate fantasy points using the
  * simplified hole-distribution model (all under-par = birdies; all over-par = bogeys).
  *
  * Points per hole: birdie=3, par=0.5, bogey=-1
- * Baseline = holes played × 0.5
- * Under par: baseline + |score| × 2.5  (birdie upgrade = 3 − 0.5 = +2.5)
- * Over par:  baseline − |score| × 1.5  (bogey downgrade = −1 − 0.5 = −1.5)
+ * Baseline = holes played x 0.5
+ * Under par: baseline + |score| x 2.5
+ * Over par:  baseline - |score| x 1.5
  */
 function roundScoreToPts(scoreToPar: number, holesPlayed: number): number {
   const baseline = holesPlayed * 0.5;
@@ -94,7 +119,70 @@ function parseRelativeToPar(raw: string | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-// ─── ESPN Stats Provider ──────────────────────────────────────────────────────
+function parseRoundScore(ls: EspnLinkscore | undefined): number | null {
+  if (!ls) return null;
+  return parseRelativeToPar(ls.displayValue);
+}
+
+function parseHoleStrokes(hole: EspnRoundHole): number | null {
+  if (typeof hole.value === "number" && Number.isFinite(hole.value)) {
+    return hole.value;
+  }
+
+  const parsed = Number(hole.displayValue);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function scoreHole(hole: EspnRoundHole): number | null {
+  const strokes = parseHoleStrokes(hole);
+  const par = typeof hole.par === "number" && Number.isFinite(hole.par) ? hole.par : null;
+
+  if (strokes !== null && par !== null) {
+    // ESPN reports aces on par 3s as generic "EAGLE", so detect the made-1 directly.
+    if (strokes === 1) return HOLE_POINTS.hole_in_one;
+    return holeScoreToPoints(strokes - par);
+  }
+
+  const scoreTypeToPar = parseRelativeToPar(hole.scoreType?.displayValue);
+  return scoreTypeToPar === null ? null : holeScoreToPoints(scoreTypeToPar);
+}
+
+function scoreRoundExactly(round: EspnSummaryRound | undefined): number | null {
+  const holes = round?.linescores ?? [];
+  if (holes.length === 0) return null;
+
+  let total = 0;
+  for (const hole of holes) {
+    const points = scoreHole(hole);
+    if (points === null) return null;
+    total += points;
+  }
+
+  return total;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await mapper(items[index], index);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, () => worker())
+  );
+
+  return results;
+}
 
 export class EspnStatsProvider implements StatsProvider {
   async getTournamentField(): Promise<PlayerStatData[]> {
@@ -102,92 +190,115 @@ export class EspnStatsProvider implements StatsProvider {
   }
 
   async getLivePlayerStats(): Promise<PlayerStatData[]> {
-    const competitors = await this.fetchMastersCompetitors();
+    const { eventId, competitors } = await this.fetchMastersCompetitors();
 
     if (competitors.length === 0) {
       console.warn("[ESPN] No Masters competitors found in API response");
       return [];
     }
 
-    return competitors
-      .filter((c) => !!c.athlete?.displayName)
-      .map((c): PlayerStatData => {
-        const name = c.athlete!.displayName!;
-        const linescores = c.linescores ?? [];
-        const statusType = c.status?.type?.name ?? null;
+    const summaryByCompetitorId =
+      eventId !== null
+        ? await this.fetchCompetitorSummaries(
+            eventId,
+            competitors.flatMap((competitor) =>
+              competitor.athlete?.id ? [competitor.athlete.id] : []
+            )
+          )
+        : new Map<string, EspnCompetitorSummaryResponse>();
 
-        /**
-         * ESPN quirk: unplayed rounds still have a linescore entry with
-         *   value: 0, displayValue: "-"
-         * A played round (even par) has:
-         *   value: 0, displayValue: "E" or a number
-         * We treat "-" displayValue as "not played" → null pts.
-         */
-        function parseRoundScore(ls: EspnLinkscore | undefined): number | null {
-          if (!ls) return null;
-          return parseRelativeToPar(ls.displayValue);
-        }
+    return competitors
+      .filter((competitor) => !!competitor.athlete?.displayName)
+      .map((competitor): PlayerStatData => {
+        const competitorId = competitor.athlete?.id ?? null;
+        const summary = competitorId ? summaryByCompetitorId.get(competitorId) ?? null : null;
+        const name = competitor.athlete!.displayName!;
+        const linescores = competitor.linescores ?? [];
+        const statusType = competitor.status?.type?.name ?? null;
 
         const r1Raw = parseRoundScore(linescores[0]);
         const r2Raw = parseRoundScore(linescores[1]);
         const r3Raw = parseRoundScore(linescores[2]);
         const r4Raw = parseRoundScore(linescores[3]);
 
-        // Position string: "T1", "1", "MC", "WD", "CUT"
-        const rawPosition = c.status?.position?.displayName ?? null;
+        const rawPosition = competitor.status?.position?.displayName ?? null;
         const position = rawPosition && rawPosition !== "-" ? rawPosition : null;
 
-        // "Thru" — check statistics array first, then status.thru
         let thru: string | null = null;
-        const thruStat = c.statistics?.find((s) => s.name === "thru");
+        const thruStat = competitor.statistics?.find((stat) => stat.name === "thru");
         if (statusType === "STATUS_SCHEDULED") {
           thru = null;
         } else if (thruStat?.displayValue) {
           thru = thruStat.displayValue;
-        } else if (c.status?.displayThru) {
-          thru = c.status.displayThru;
-        } else if (typeof c.status?.thru === "number" && c.status.thru > 0) {
-          thru = String(c.status.thru);
-        } else if (c.status?.thru && typeof c.status.thru === "object" && c.status.thru.displayValue) {
-          thru = c.status.thru.displayValue;
+        } else if (competitor.status?.displayThru) {
+          thru = competitor.status.displayThru;
+        } else if (
+          typeof competitor.status?.thru === "number" &&
+          competitor.status.thru > 0
+        ) {
+          thru = String(competitor.status.thru);
+        } else if (
+          competitor.status?.thru &&
+          typeof competitor.status.thru === "object" &&
+          competitor.status.thru.displayValue
+        ) {
+          thru = competitor.status.thru.displayValue;
         } else if (statusType === "STATUS_FINISHED") {
           thru = "F";
         }
 
-        // Current round (1-4) from status.period or inferred from linescores length
         const round: number | null =
-          typeof c.status?.period === "number"
-            ? c.status.period
+          typeof competitor.status?.period === "number"
+            ? competitor.status.period
             : linescores.length > 0
-            ? linescores.length
-            : null;
+              ? linescores.length
+              : null;
 
-        // Holes completed this round
         let holesCompleted: number | null = null;
         if (thru === "F") {
           holesCompleted = 18;
         } else if (thru) {
-          const n = parseInt(thru, 10);
-          if (!isNaN(n)) holesCompleted = n;
+          const parsed = parseInt(thru, 10);
+          if (!Number.isNaN(parsed)) holesCompleted = parsed;
         }
 
-        const pointsForRound = (scoreToPar: number | null, roundNumber: number): number | null => {
+        const currentRoundSummary =
+          round !== null
+            ? summary?.rounds?.find((summaryRound) => summaryRound.period === round)
+            : undefined;
+        if (
+          holesCompleted === null &&
+          currentRoundSummary?.linescores &&
+          currentRoundSummary.linescores.length > 0
+        ) {
+          holesCompleted = currentRoundSummary.linescores.length;
+        }
+
+        const pointsForRound = (
+          scoreToPar: number | null,
+          roundNumber: number
+        ): number | null => {
           if (scoreToPar === null) return null;
+
           const holesPlayed =
             round === roundNumber
               ? holesCompleted ?? 18
               : 18;
+
           return roundScoreToPts(scoreToPar, holesPlayed);
         };
 
-        // Convert to fantasy points only for rounds that have been played
-        const r1Pts = pointsForRound(r1Raw, 1);
-        const r2Pts = pointsForRound(r2Raw, 2);
-        const r3Pts = pointsForRound(r3Raw, 3);
-        const r4Pts = pointsForRound(r4Raw, 4);
+        const exactPointsForRound = (roundNumber: number): number | null =>
+          scoreRoundExactly(
+            summary?.rounds?.find((summaryRound) => summaryRound.period === roundNumber)
+          );
 
-        // Total score to par (cumulative)
-        const totalToPar = parseRelativeToPar(c.score?.displayValue);
+        const r1Pts = exactPointsForRound(1) ?? pointsForRound(r1Raw, 1);
+        const r2Pts = exactPointsForRound(2) ?? pointsForRound(r2Raw, 2);
+        const r3Pts = exactPointsForRound(3) ?? pointsForRound(r3Raw, 3);
+        const r4Pts = exactPointsForRound(4) ?? pointsForRound(r4Raw, 4);
+
+        const totalToPar = parseRelativeToPar(competitor.score?.displayValue);
 
         return {
           name,
@@ -204,21 +315,22 @@ export class EspnStatsProvider implements StatsProvider {
             espnName: name,
             linescores,
             roundScores: { r1: r1Raw, r2: r2Raw, r3: r3Raw, r4: r4Raw },
-            status: c.status,
-            score: c.score,
+            scoringSource: summary ? "hole_by_hole" : "approximation",
+            status: competitor.status,
+            score: competitor.score,
           },
         };
       });
   }
 
   async getLastUpdatedTime(): Promise<Date | null> {
-    return new Date(); // ESPN data is always live
+    return new Date();
   }
 
-  // ─── Private helpers ─────────────────────────────────────────────────────
-
-  private async fetchMastersCompetitors(): Promise<EspnCompetitor[]> {
-    // Try two URL patterns — ESPN routes Masters differently depending on context
+  private async fetchMastersCompetitors(): Promise<{
+    eventId: string | null;
+    competitors: EspnCompetitor[];
+  }> {
     const attempts = [
       { url: `${ESPN_BASE}?league=masters`, label: "masters league" },
       { url: ESPN_BASE, label: "default leaderboard" },
@@ -229,7 +341,7 @@ export class EspnStatsProvider implements StatsProvider {
         const res = await fetch(url, {
           headers: { "User-Agent": "Mozilla/5.0 (compatible; SundayChurchMasters/1.0)" },
           signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-          cache: "no-store", // always fetch fresh data — never cache
+          cache: "no-store",
         });
 
         if (!res.ok) {
@@ -245,12 +357,11 @@ export class EspnStatsProvider implements StatsProvider {
           continue;
         }
 
-        // Prefer an event with "masters" in the name; fall back to first event
         const event =
           events.find(
-            (e) =>
-              e.name?.toLowerCase().includes("masters") ||
-              e.shortName?.toLowerCase().includes("masters")
+            (candidate) =>
+              candidate.name?.toLowerCase().includes("masters") ||
+              candidate.shortName?.toLowerCase().includes("masters")
           ) ?? events[0];
 
         const competitors = event?.competitions?.[0]?.competitors ?? [];
@@ -258,15 +369,68 @@ export class EspnStatsProvider implements StatsProvider {
           console.log(
             `[ESPN] Found ${competitors.length} competitors via ${label} (event: ${event.name})`
           );
-          return competitors;
+          return { eventId: event.id ?? null, competitors };
         }
 
         console.warn(`[ESPN] ${label}: event found but no competitors`);
       } catch (err) {
-        console.warn(`[ESPN] ${label}: fetch error —`, err instanceof Error ? err.message : err);
+        console.warn(
+          `[ESPN] ${label}: fetch error -`,
+          err instanceof Error ? err.message : err
+        );
       }
     }
 
-    return [];
+    return { eventId: null, competitors: [] };
+  }
+
+  private async fetchCompetitorSummaries(
+    eventId: string,
+    competitorIds: string[]
+  ): Promise<Map<string, EspnCompetitorSummaryResponse>> {
+    const summaries = await mapWithConcurrency(
+      competitorIds,
+      SUMMARY_FETCH_CONCURRENCY,
+      async (competitorId) => {
+        const summary = await this.fetchCompetitorSummary(eventId, competitorId);
+        return [competitorId, summary] as const;
+      }
+    );
+
+    return new Map(
+      summaries.flatMap(([competitorId, summary]) =>
+        summary ? [[competitorId, summary] as const] : []
+      )
+    );
+  }
+
+  private async fetchCompetitorSummary(
+    eventId: string,
+    competitorId: string
+  ): Promise<EspnCompetitorSummaryResponse | null> {
+    const url =
+      `${ESPN_SUMMARY_BASE}/${ESPN_TOUR}/leaderboard/${eventId}/competitorsummary/${competitorId}` +
+      "?lang=en&region=us";
+
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; SundayChurchMasters/1.0)" },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        console.warn(`[ESPN] competitor summary ${competitorId}: HTTP ${res.status}`);
+        return null;
+      }
+
+      return (await res.json()) as EspnCompetitorSummaryResponse;
+    } catch (err) {
+      console.warn(
+        `[ESPN] competitor summary ${competitorId}: fetch error -`,
+        err instanceof Error ? err.message : err
+      );
+      return null;
+    }
   }
 }
