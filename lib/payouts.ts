@@ -19,11 +19,22 @@ export interface PrizeMoneyRow {
   totalLive: number;
 }
 
+export interface AwardedMoneyRow {
+  entryId: string;
+  userName: string;
+  wonSoFar: number;
+}
+
 export interface PrizeMoneySummary {
   pot: number;
   liveTodayRound: 1 | 2 | 3 | 4 | null;
   completedRounds: Array<1 | 2 | 3 | 4>;
   rows: PrizeMoneyRow[];
+}
+
+export interface AwardedMoneySummary {
+  completedRounds: Array<1 | 2 | 3 | 4>;
+  rows: AwardedMoneyRow[];
 }
 
 const EPSILON = 1e-9;
@@ -189,6 +200,30 @@ export function getPrizeMoneySummary(
     pot,
     liveTodayRound,
     completedRounds,
+    rows,
+  };
+}
+
+export function getAwardedMoneySummary(
+  entries: PrizeMoneyEntry[],
+  activeRound: 1 | 2 | 3 | 4 | null
+): AwardedMoneySummary {
+  const summary = getPrizeMoneySummary(entries, activeRound);
+
+  const rows = summary.rows
+    .filter((row) => row.wonSoFar > EPSILON)
+    .map((row) => ({
+      entryId: row.entryId,
+      userName: row.userName,
+      wonSoFar: row.wonSoFar,
+    }))
+    .sort((a, b) => {
+      if (Math.abs(b.wonSoFar - a.wonSoFar) > EPSILON) return b.wonSoFar - a.wonSoFar;
+      return a.userName.localeCompare(b.userName);
+    });
+
+  return {
+    completedRounds: summary.completedRounds,
     rows,
   };
 }

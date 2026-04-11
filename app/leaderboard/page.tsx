@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { LastUpdatedBanner } from "@/components/LastUpdatedBanner";
 import { LeaderboardChat } from "@/components/LeaderboardChat";
+import { AwardedMoneyTable } from "@/components/AwardedMoneyTable";
 import { PrizeMoneyTable } from "@/components/PrizeMoneyTable";
-import { getDailyPayoutMap, getPrizeMoneySummary } from "@/lib/payouts";
+import { getAwardedMoneySummary, getDailyPayoutMap, getPrizeMoneySummary } from "@/lib/payouts";
 import Link from "next/link";
 import type { EntryScoreResult, PlayerScoreResult } from "@/lib/scoring/engine";
 
@@ -345,6 +346,9 @@ function LeaderboardContent() {
   const prizeMoneySummary = data
     ? getPrizeMoneySummary(data.leaderboard, todayRound)
     : null;
+  const awardedMoneySummary = data
+    ? getAwardedMoneySummary(data.leaderboard, todayRound)
+    : null;
 
   const sortedEntries = data
     ? [...data.leaderboard].sort((a, b) => {
@@ -412,8 +416,21 @@ function LeaderboardContent() {
           <PrizeMoneyTable
             rows={prizeMoneySummary.rows}
             liveTodayRound={prizeMoneySummary.liveTodayRound}
-            title="Money Race"
-            subtitle="Won = completed daily payouts. Live total also includes the current day and the current overall payout spots if the tournament ended right now."
+            title="Live Money Race"
+            subtitle="This board includes completed daily payouts, the current day, and the current overall payout spots if the tournament ended right now."
+            limit={5}
+            compact
+          />
+        </div>
+      )}
+
+      {awardedMoneySummary && (
+        <div className="mb-5">
+          <AwardedMoneyTable
+            rows={awardedMoneySummary.rows}
+            completedRounds={awardedMoneySummary.completedRounds}
+            title="Money Already Won"
+            subtitle="Only completed daily payouts count here. The current round does not show up until that day is finished and paid out."
             limit={5}
             compact
           />

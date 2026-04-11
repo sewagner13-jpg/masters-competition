@@ -1,9 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AwardedMoneyTable } from "@/components/AwardedMoneyTable";
 import { LastUpdatedBanner } from "@/components/LastUpdatedBanner";
 import { PrizeMoneyTable } from "@/components/PrizeMoneyTable";
-import { getPrizeMoneySummary, type PrizeMoneyEntry } from "@/lib/payouts";
+import {
+  getAwardedMoneySummary,
+  getPrizeMoneySummary,
+  type PrizeMoneyEntry,
+} from "@/lib/payouts";
 
 interface LeaderboardResponse {
   leaderboard: PrizeMoneyEntry[];
@@ -50,13 +55,20 @@ export function LivePrizeMoneySection() {
   }
 
   const summary = getPrizeMoneySummary(data.leaderboard, data.activeRound);
+  const awardedSummary = getAwardedMoneySummary(data.leaderboard, data.activeRound);
 
   return (
     <div className="space-y-4">
+      <AwardedMoneyTable
+        rows={awardedSummary.rows}
+        completedRounds={awardedSummary.completedRounds}
+        title="Money Already Won"
+        subtitle="This board only counts completed daily payouts. The current day stays out until that round is finished and paid."
+      />
       <PrizeMoneyTable
         rows={summary.rows}
         liveTodayRound={summary.liveTodayRound}
-        title="Prize Money Leaderboard"
+        title="Live Prize Money Leaderboard"
         subtitle="Won = completed daily payouts. Live total adds the current day and the current overall payout spots if the standings held right now."
       />
       <LastUpdatedBanner lastSyncedAt={data.lastSyncedAt} />
