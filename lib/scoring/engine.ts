@@ -85,6 +85,25 @@ export async function computeAllEntryScores(): Promise<void> {
     },
   });
 
+  const sundayTeamNames = Array.from(
+    new Set(
+      entries
+        .map((entry) => entry.sundayTeamName)
+        .filter((teamName): teamName is string => Boolean(teamName))
+    )
+  );
+
+  const sundayTeams = sundayTeamNames.length
+    ? await prisma.sundayTeam.findMany({
+        where: { teamName: { in: sundayTeamNames } },
+        select: { teamName: true, bonusPoints: true },
+      })
+    : [];
+
+  const sundayBonusByTeamName = new Map(
+    sundayTeams.map((team) => [team.teamName, team.bonusPoints])
+  );
+
   for (const entry of entries) {
     let r1 = 0, r2 = 0, r3 = 0, r4 = 0;
 
@@ -97,14 +116,9 @@ export async function computeAllEntryScores(): Promise<void> {
       r4 += stat.r4Pts ?? 0;
     }
 
-    // Sunday bonus: look up assigned team
-    let sundayBonus = entry.sundayBonusPoints;
-    if (entry.sundayTeamName) {
-      const team = await prisma.sundayTeam.findUnique({
-        where: { teamName: entry.sundayTeamName },
-      });
-      if (team) sundayBonus = team.bonusPoints;
-    }
+    const sundayBonus = entry.sundayTeamName
+      ? sundayBonusByTeamName.get(entry.sundayTeamName) ?? 0
+      : 0;
 
     const overall = r1 + r2 + r3 + r4 + sundayBonus;
 

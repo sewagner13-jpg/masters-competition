@@ -36,6 +36,11 @@ interface SundayTeam {
   id: string;
   teamName: string;
   bonusPoints: number;
+  holeScores: {
+    hole: number;
+    scoreToPar: number;
+    pts: number;
+  }[] | null;
 }
 
 interface SyncRun {
@@ -79,6 +84,25 @@ function statusBadge(status: string) {
 
 function usd(n: number) {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function getHoleScoreState(
+  holeScores: SundayTeam["holeScores"] | undefined
+): Record<number, string> {
+  const next: Record<number, string> = {};
+
+  if (!Array.isArray(holeScores)) return next;
+
+  for (const score of holeScores) {
+    const hole = Number(score?.hole);
+    const scoreToPar = Number(score?.scoreToPar);
+
+    if (Number.isInteger(hole) && hole >= 1 && hole <= 18 && Number.isFinite(scoreToPar)) {
+      next[hole] = String(scoreToPar);
+    }
+  }
+
+  return next;
 }
 
 // ─── Payout Calculator ────────────────────────────────────────────────────────
@@ -170,6 +194,7 @@ export default function AdminPage() {
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   const [editingEntry, setEditingEntry] = useState<EntryAdmin | null>(null);
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [newTeamName, setNewTeamName] = useState("");
   const [holeScores, setHoleScores] = useState<Record<number, string>>({});
   const [teamMsg, setTeamMsg] = useState<string | null>(null);
@@ -238,6 +263,19 @@ export default function AdminPage() {
     loadAll();
   }
 
+  function resetTeamEditor() {
+    setEditingTeamId(null);
+    setNewTeamName("");
+    setHoleScores({});
+  }
+
+  function loadTeamEditor(team: SundayTeam) {
+    setEditingTeamId(team.id);
+    setNewTeamName(team.teamName);
+    setHoleScores(getHoleScoreState(team.holeScores));
+    setTeamMsg(`Editing "${team.teamName}"`);
+  }
+
   async function handleSaveTeam() {
     setTeamMsg(null);
     const parsed: { hole: number; scoreToPar: number }[] = [];
@@ -248,11 +286,49 @@ export default function AdminPage() {
     const res = await fetch("/api/admin/sunday-team", {
       method: "POST",
       headers: hdrs(),
-      body: JSON.stringify({ teamName: newTeamName.trim(), holeScores: parsed }),
+      body: JSON.stringify({
+        teamId: editingTeamId,
+        teamName: newTeamName.trim(),
+        holeScores: parsed,
+      }),
     });
     const d = await res.json();
-    if (res.ok) { setTeamMsg(`Saved "${d.team.teamName}" — ${d.team.bonusPoints.toFixed(1)} pts`); loadAll(); }
+    if (res.ok) {
+      setEditingTeamId(d.team.id);
+      setNewTeamName(d.team.teamName);
+      setHoleScores(getHoleScoreState(d.team.holeScores));
+      setTeamMsg(`Saved "${d.team.teamName}" — ${d.team.bonusPoints.toFixed(1)} pts`);
+      loadAll();
+    }
     else setTeamMsg(`Error: ${d.error}`);
+  }
+
+  async function handleDeleteTeam(team: SundayTeam) {
+    const confirmed = window.confirm(
+      `Delete "${team.teamName}"?\n\nThis will clear that Sunday team assignment from any linked entries and remove its bonus from their overall scores.`
+    );
+
+    if (!confirmed) return;
+
+    setTeamMsg(null);
+
+    const res = await fetch("/api/admin/sunday-team", {
+      method: "DELETE",
+      headers: hdrs(),
+      body: JSON.stringify({ teamId: team.id }),
+    });
+    const d = await res.json();
+
+    if (res.ok) {
+      if (editingTeamId === team.id) resetTeamEditor();
+      setTeamMsg(
+        `Deleted "${team.teamName}"${d.clearedAssignments ? ` — cleared ${d.clearedAssignments} linked entr${d.clearedAssignments === 1 ? "y" : "ies"}` : ""}`
+      );
+      loadAll();
+      return;
+    }
+
+    setTeamMsg(`Error: ${d.error}`);
   }
 
   // Post-lock roster edit (admin)
@@ -400,20 +476,58 @@ export default function AdminPage() {
         {sundayTeams.length > 0 && (
           <div className="mb-4 flex flex-wrap gap-2">
             {sundayTeams.map((t) => (
-              <button
+              <div
                 key={t.id}
-                onClick={() => setNewTeamName(t.teamName)}
-                className="bg-green-50 border border-green-200 text-xs px-3 py-1 rounded-full text-green-800 hover:bg-green-100"
-                title="Click to load and edit"
+                className={`flex items-center gap-2 rounded-full border px-3 py-1 ${
+                  editingTeamId === t.id
+                    ? "border-masters-green bg-green-100"
+                    : "border-green-200 bg-green-50"
+                }`}
               >
-                {t.teamName}: <strong>{t.bonusPoints.toFixed(1)} pts</strong>
-              </button>
+                <button
+                  onClick={() => loadTeamEditor(t)}
+                  className="text-xs text-green-800 hover:text-green-900"
+                  title="Click to load and edit"
+                >
+                  {t.teamName}: <strong>{t.bonusPoints.toFixed(1)} pts</strong>
+                </button>
+                <button
+                  onClick={() => handleDeleteTeam(t)}
+                  className="text-[11px] font-semibold text-red-600 hover:text-red-700"
+                  title="Delete team"
+                >
+                  Delete
+                </button>
+              </div>
             ))}
           </div>
         )}
 
         {/* Add / update team */}
         <div className="border border-gray-200 rounded-lg p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                {editingTeamId ? "Editing existing team" : "Create new team"}
+              </p>
+              {editingTeamId && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Renaming a team will keep linked entries attached to the new name.
+                </p>
+              )}
+            </div>
+            {(editingTeamId || newTeamName || Object.keys(holeScores).length > 0) && (
+              <button
+                onClick={() => {
+                  resetTeamEditor();
+                  setTeamMsg(null);
+                }}
+                className="text-xs text-gray-500 underline"
+              >
+                Clear editor
+              </button>
+            )}
+          </div>
           <div className="mb-3">
             <label className="block text-xs font-semibold text-gray-700 mb-1">Team Name</label>
             <input type="text" value={newTeamName} onChange={(e) => setNewTeamName(e.target.value)}
@@ -434,10 +548,23 @@ export default function AdminPage() {
               </div>
             ))}
           </div>
-          <button onClick={handleSaveTeam} disabled={!newTeamName.trim()}
-            className="bg-masters-green text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-green-800 disabled:opacity-40">
-            Save Team Scores
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={handleSaveTeam} disabled={!newTeamName.trim()}
+              className="bg-masters-green text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-green-800 disabled:opacity-40">
+              {editingTeamId ? "Update Team Scores" : "Save Team Scores"}
+            </button>
+            {editingTeamId && (
+              <button
+                onClick={() => {
+                  const team = sundayTeams.find((candidate) => candidate.id === editingTeamId);
+                  if (team) handleDeleteTeam(team);
+                }}
+                className="bg-red-50 text-red-700 text-sm font-bold px-4 py-2 rounded-lg hover:bg-red-100 border border-red-200"
+              >
+                Delete Team
+              </button>
+            )}
+          </div>
           {teamMsg && <p className="mt-2 text-sm text-gray-700">{teamMsg}</p>}
         </div>
       </section>
