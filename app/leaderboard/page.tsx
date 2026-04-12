@@ -119,6 +119,7 @@ function TopLeadersCard({
       <div className="divide-y divide-gray-100">
         {leaders.map((entry, idx) => {
           const dailyPayout = dailyPayoutMap.get(entry.entryId) ?? 0;
+          const showSundayTeam = tab !== "today" && (entry.sundayTeamName || entry.sundayBonusPoints !== 0);
 
           return (
           <div key={entry.entryId} className="flex items-center justify-between gap-3 px-4 py-3">
@@ -133,6 +134,12 @@ function TopLeadersCard({
               {tab === "today" && (
                 <div className={`text-[11px] font-semibold ${dailyPayout > 0 ? "text-amber-700" : "text-gray-400"}`}>
                   {dailyPayout > 0 ? `Today ${usd(dailyPayout)}` : "Today —"}
+                </div>
+              )}
+              {showSundayTeam && (
+                <div className="max-w-[12rem] truncate text-[11px] font-semibold text-gray-500">
+                  {entry.sundayTeamName ? `Sun team: ${entry.sundayTeamName}` : "Sun team"}
+                  {` · ${fmt(entry.sundayBonusPoints)}`}
                 </div>
               )}
             </div>
@@ -167,6 +174,7 @@ function EntryRow({
   const finishedPlayers = hasLineup
     ? entry.players.filter((player) => player.isFinished)
     : [];
+  const showSundayTeamSummary = Boolean(entry.sundayTeamName) || entry.sundayBonusPoints !== 0;
 
   const roundScore = todayRound
     ? (entry[ROUND_SCORE_KEY[todayRound] as keyof typeof entry] as number)
@@ -219,6 +227,15 @@ function EntryRow({
                 <span className="font-semibold text-gray-600">
                   Finished ({finishedPlayers.length})
                 </span>
+              </p>
+            )}
+            {showSundayTeamSummary && (
+              <p className="text-xs leading-5 text-gray-500">
+                <span className="font-semibold text-masters-green">Sunday team:</span>{" "}
+                {entry.sundayTeamName ?? "Unassigned"}
+                <span className="mx-1.5 text-gray-300">•</span>
+                <span className="font-semibold text-gray-600">Bonus in overall:</span>{" "}
+                {fmt(entry.sundayBonusPoints)}
               </p>
             )}
           </div>
@@ -287,17 +304,26 @@ function EntryRow({
             })}
           </div>
 
+          {showSundayTeamSummary && (
+            <div className="mt-2 rounded-lg border border-masters-green/15 bg-masters-green/5 px-3 py-2">
+              <p className="text-xs text-gray-600">
+                <span className="font-semibold text-masters-green">Sunday team:</span>{" "}
+                {entry.sundayTeamName ?? "Unassigned"}
+              </p>
+              <p className="mt-0.5 text-xs text-gray-600">
+                <span className="font-semibold text-masters-green">Sunday team bonus:</span>{" "}
+                {fmt(entry.sundayBonusPoints)}{" "}
+                <span className="text-gray-400">added to overall</span>
+              </p>
+            </div>
+          )}
+
           {/* Sunday + message (if present) */}
-          {(entry.sundayRepName || entry.sundayTeamName || entry.publicMessage) && (
+          {(entry.sundayRepName || entry.publicMessage) && (
             <div className="mt-2 pt-2 border-t border-gray-100 space-y-0.5">
               {entry.sundayRepName && (
                 <p className="text-xs text-gray-500">
                   <span className="font-medium text-gray-600">Sunday rep:</span> {entry.sundayRepName}
-                </p>
-              )}
-              {entry.sundayTeamName && (
-                <p className="text-xs text-gray-500">
-                  <span className="font-medium text-gray-600">Sunday team:</span> {entry.sundayTeamName}
                 </p>
               )}
               {entry.publicMessage && (

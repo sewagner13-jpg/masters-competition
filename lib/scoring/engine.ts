@@ -219,7 +219,7 @@ export async function getLeaderboard(isLocked: boolean): Promise<EntryScoreResul
         })
       : [],
     sundayRepName: null,
-    sundayTeamName: null,
+    sundayTeamName: isLocked ? entry.sundayTeamName : null,
     publicMessage: null,
   }));
 }

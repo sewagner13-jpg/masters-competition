@@ -2,9 +2,9 @@
  * ESPN Stats Provider - Masters Tournament
  *
  * Pulls the public leaderboard plus each competitor's scorecard summary.
- * When ESPN exposes hole-by-hole data, we compute exact round fantasy points
- * from the real hole results. If a summary fetch fails, we fall back to the
- * older score-to-par approximation so sync can still complete.
+ * Round fantasy points are computed from real hole-by-hole results only.
+ * If a summary fetch fails, we leave round points unset so sync does not
+ * overwrite previously correct stored scores with an approximation.
  */
 
 import { HOLE_POINTS, holeScoreToPoints } from "@/lib/scoring/config";
@@ -90,22 +90,6 @@ interface EspnResponse {
 interface EspnCompetitorSummaryResponse {
   competitor?: { id?: string };
   rounds?: EspnSummaryRound[];
-}
-
-/**
- * Converts a round score-to-par to approximate fantasy points using the
- * simplified hole-distribution model (all under-par = birdies; all over-par = bogeys).
- *
- * Points per hole: birdie=3, par=0.5, bogey=-1
- * Baseline = holes played x 0.5
- * Under par: baseline + |score| x 2.5
- * Over par:  baseline - |score| x 1.5
- */
-function roundScoreToPts(scoreToPar: number, holesPlayed: number): number {
-  const baseline = holesPlayed * 0.5;
-  if (scoreToPar < 0) return baseline + Math.abs(scoreToPar) * 2.5;
-  if (scoreToPar > 0) return Math.max(0, baseline - scoreToPar * 1.5);
-  return baseline;
 }
 
 function parseRelativeToPar(raw: string | undefined): number | null {
@@ -274,29 +258,15 @@ export class EspnStatsProvider implements StatsProvider {
           holesCompleted = currentRoundSummary.linescores.length;
         }
 
-        const pointsForRound = (
-          scoreToPar: number | null,
-          roundNumber: number
-        ): number | null => {
-          if (scoreToPar === null) return null;
-
-          const holesPlayed =
-            round === roundNumber
-              ? holesCompleted ?? 18
-              : 18;
-
-          return roundScoreToPts(scoreToPar, holesPlayed);
-        };
-
         const exactPointsForRound = (roundNumber: number): number | null =>
           scoreRoundExactly(
             summary?.rounds?.find((summaryRound) => summaryRound.period === roundNumber)
           );
 
-        const r1Pts = exactPointsForRound(1) ?? pointsForRound(r1Raw, 1);
-        const r2Pts = exactPointsForRound(2) ?? pointsForRound(r2Raw, 2);
-        const r3Pts = exactPointsForRound(3) ?? pointsForRound(r3Raw, 3);
-        const r4Pts = exactPointsForRound(4) ?? pointsForRound(r4Raw, 4);
+        const r1Pts = exactPointsForRound(1);
+        const r2Pts = exactPointsForRound(2);
+        const r3Pts = exactPointsForRound(3);
+        const r4Pts = exactPointsForRound(4);
 
         const totalToPar = parseRelativeToPar(competitor.score?.displayValue);
 
@@ -315,7 +285,7 @@ export class EspnStatsProvider implements StatsProvider {
             espnName: name,
             linescores,
             roundScores: { r1: r1Raw, r2: r2Raw, r3: r3Raw, r4: r4Raw },
-            scoringSource: summary ? "hole_by_hole" : "approximation",
+            scoringSource: summary ? "hole_by_hole" : "summary_unavailable",
             status: competitor.status,
             score: competitor.score,
           },
