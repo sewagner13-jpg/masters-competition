@@ -6,6 +6,7 @@ import { RosterBuilder } from "@/components/RosterBuilder";
 import { SalaryTracker } from "@/components/SalaryTracker";
 import { ROSTER_SIZE, SALARY_CAP, BUY_IN } from "@/lib/constants";
 import { PAYOUT_STRUCTURE } from "@/lib/payouts";
+import { holeScoreToPoints } from "@/lib/scoring/config";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,8 +39,8 @@ interface SundayTeam {
   bonusPoints: number;
   holeScores: {
     hole: number;
-    scoreToPar: number;
-    pts: number;
+    scoreToPar?: number;
+    pts?: number;
   }[] | null;
 }
 
@@ -95,10 +96,18 @@ function getHoleScoreState(
 
   for (const score of holeScores) {
     const hole = Number(score?.hole);
+    const pts = Number(score?.pts);
     const scoreToPar = Number(score?.scoreToPar);
 
-    if (Number.isInteger(hole) && hole >= 1 && hole <= 18 && Number.isFinite(scoreToPar)) {
-      next[hole] = String(scoreToPar);
+    if (!Number.isInteger(hole) || hole < 1 || hole > 18) continue;
+
+    if (Number.isFinite(pts)) {
+      next[hole] = String(pts);
+      continue;
+    }
+
+    if (Number.isFinite(scoreToPar)) {
+      next[hole] = String(holeScoreToPoints(scoreToPar));
     }
   }
 
@@ -278,10 +287,10 @@ export default function AdminPage() {
 
   async function handleSaveTeam() {
     setTeamMsg(null);
-    const parsed: { hole: number; scoreToPar: number }[] = [];
+    const parsed: { hole: number; pts: number }[] = [];
     for (let h = 1; h <= 18; h++) {
       const v = holeScores[h];
-      if (v !== undefined && v !== "") parsed.push({ hole: h, scoreToPar: Number(v) });
+      if (v !== undefined && v !== "") parsed.push({ hole: h, pts: Number(v) });
     }
     const res = await fetch("/api/admin/sunday-team", {
       method: "POST",
@@ -468,8 +477,7 @@ export default function AdminPage() {
       <section className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
         <h2 className="font-bold text-gray-800 mb-1">Sunday Team Scores</h2>
         <p className="text-xs text-gray-500 mb-4">
-          Enter hole-by-hole scores for each Sunday team. Score to par: -1 = birdie, 0 = par, 1 = bogey, 2 = double bogey, 3+ = worse than double bogey.
-          Points are computed automatically using the fantasy scoring table.
+          Enter the fantasy points earned on each hole for a Sunday team. Decimals and negative values are allowed, so you can enter values like 0.5, -1, -2, or -5 directly.
         </p>
 
         {/* Existing teams — click to load into editor */}
@@ -539,11 +547,14 @@ export default function AdminPage() {
               <div key={hole} className="text-center">
                 <div className="text-xs text-gray-400 mb-0.5">{hole}</div>
                 <input
-                  type="number" min={-3}
+                  type="number"
+                  min={-5}
+                  max={20}
+                  step="0.5"
                   value={holeScores[hole] ?? ""}
                   onChange={(e) => setHoleScores((p) => ({ ...p, [hole]: e.target.value }))}
                   className="w-full border border-gray-300 rounded text-center text-sm py-1 focus:outline-none focus:ring-1 focus:ring-masters-green"
-                  placeholder="0"
+                  placeholder="0.5"
                 />
               </div>
             ))}

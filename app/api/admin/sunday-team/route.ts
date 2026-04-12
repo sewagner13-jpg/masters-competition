@@ -2,7 +2,7 @@
  * Sunday team management API
  *
  * GET  — list all Sunday teams
- * POST — create or update a Sunday team (name + hole scores)
+ * POST — create or update a Sunday team (name + hole fantasy points)
  * DELETE — remove a Sunday team and clear linked entry assignments
  */
 
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { teamId, teamName, holeScores } = body;
-    // holeScores: [{ hole: 1, scoreToPar: -1 }, ...]
+    // holeScores: [{ hole: 1, pts: 3 }, ...]
 
     const trimmedTeamName = String(teamName ?? "").trim();
 
@@ -40,15 +40,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "teamName is required" }, { status: 400 });
     }
 
-    // Compute total bonus points from hole scores
+    // Compute total bonus points from direct hole fantasy points.
+    // Backward-compatible fallback: older clients may still send scoreToPar.
     let bonusPoints = 0;
-    const scoredHoles: { hole: number; scoreToPar: number; pts: number }[] = [];
+    const scoredHoles: { hole: number; pts: number; scoreToPar?: number }[] = [];
 
     if (Array.isArray(holeScores)) {
       for (const h of holeScores) {
-        const pts = holeScoreToPoints(Number(h.scoreToPar ?? 0));
+        const hole = Number(h?.hole);
+        if (!Number.isInteger(hole) || hole < 1 || hole > 18) continue;
+
+        const rawPts = Number(h?.pts);
+        const rawScoreToPar = Number(h?.scoreToPar);
+        const pts = Number.isFinite(rawPts)
+          ? rawPts
+          : Number.isFinite(rawScoreToPar)
+            ? holeScoreToPoints(rawScoreToPar)
+            : null;
+
+        if (pts === null) continue;
+
         bonusPoints += pts;
-        scoredHoles.push({ hole: h.hole, scoreToPar: h.scoreToPar, pts });
+        if (Number.isFinite(rawScoreToPar)) {
+          scoredHoles.push({ hole, pts, scoreToPar: rawScoreToPar });
+        } else {
+          scoredHoles.push({ hole, pts });
+        }
       }
     }
 
