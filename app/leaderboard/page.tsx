@@ -351,11 +351,14 @@ function LeaderboardContent() {
   const [tab, setTab] = useState<ViewTab>("today");
 
   const fetchLeaderboard = useCallback(() => {
-    fetch("/api/leaderboard")
+    const requestUrl = `/api/leaderboard?ts=${Date.now()}`;
+
+    fetch(requestUrl, { cache: "no-store" })
       .then((r) => r.json())
       .then((d: LeaderboardResponse) => {
         if ("error" in d) throw new Error((d as { error: string }).error);
         setData(d);
+        setError(null);
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
