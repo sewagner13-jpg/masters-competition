@@ -37,6 +37,19 @@ export interface AwardedMoneySummary {
   rows: AwardedMoneyRow[];
 }
 
+export interface FinalPayoutRow {
+  entryId: string;
+  userName: string;
+  dailyWon: number;
+  overallPayout: number;
+  totalPayout: number;
+}
+
+export interface FinalPayoutSummary {
+  completedRounds: Array<1 | 2 | 3 | 4>;
+  rows: FinalPayoutRow[];
+}
+
 const EPSILON = 1e-9;
 export const DAILY_PAYOUT_PCTS = [0.075, 0.025] as const;
 export const OVERALL_PAYOUT_PCTS = [0.30, 0.15, 0.10] as const;
@@ -219,6 +232,30 @@ export function getAwardedMoneySummary(
     }))
     .sort((a, b) => {
       if (Math.abs(b.wonSoFar - a.wonSoFar) > EPSILON) return b.wonSoFar - a.wonSoFar;
+      return a.userName.localeCompare(b.userName);
+    });
+
+  return {
+    completedRounds: summary.completedRounds,
+    rows,
+  };
+}
+
+export function getFinalPayoutSummary(entries: PrizeMoneyEntry[]): FinalPayoutSummary {
+  const summary = getPrizeMoneySummary(entries, null);
+
+  const rows = summary.rows
+    .map((row) => ({
+      entryId: row.entryId,
+      userName: row.userName,
+      dailyWon: row.wonSoFar,
+      overallPayout: row.overallRace,
+      totalPayout: row.totalLive,
+    }))
+    .filter((row) => row.totalPayout > EPSILON)
+    .sort((a, b) => {
+      if (Math.abs(b.totalPayout - a.totalPayout) > EPSILON) return b.totalPayout - a.totalPayout;
+      if (Math.abs(b.overallPayout - a.overallPayout) > EPSILON) return b.overallPayout - a.overallPayout;
       return a.userName.localeCompare(b.userName);
     });
 

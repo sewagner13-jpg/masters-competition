@@ -102,6 +102,7 @@ model ContestSettings {
   id              String   @id @default("main")
   isForceUnlocked Boolean  @default(false) // commissioner override to keep open past deadline
   lockedAt        DateTime? // when commissioner manually locked (null = use deadline)
+  endedAt         DateTime? // when commissioner marks the contest final
   updatedAt       DateTime @updatedAt
 }
 

@@ -197,6 +197,7 @@ export default function AdminPage() {
   const [sundayTeams, setSundayTeams] = useState<SundayTeam[]>([]);
   const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
   const [lockState, setLockState] = useState<LockState | null>(null);
+  const [contestEndedAt, setContestEndedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [syncing, setSyncing] = useState(false);
@@ -231,6 +232,7 @@ export default function AdminPage() {
       setEntries(settingsData.entries ?? []);
       setAllPlayers(playersData.players ?? []);
       setLockState(settingsData.lockState ?? null);
+      setContestEndedAt(settingsData.contestEndedAt ?? null);
       setSyncRuns(runsData.runs ?? []);
       setSundayTeams(teamsData.teams ?? []);
     } finally { setLoading(false); }
@@ -399,6 +401,37 @@ export default function AdminPage() {
           </button>
         </div>
         <p className="text-xs text-gray-400 mt-2">Master code for direct entry edits: <code className="font-mono bg-gray-100 px-1 rounded">use the master code you set</code></p>
+
+        <div className="mt-5 border-t border-gray-100 pt-4">
+          <h3 className="font-bold text-gray-800 mb-2">Contest Finalization</h3>
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${contestEndedAt ? "bg-masters-green/10 text-masters-green" : "bg-gray-100 text-gray-700"}`}>
+              {contestEndedAt ? "🏁 Ended" : "In Progress"}
+            </span>
+            <span className="text-xs text-gray-500">
+              {contestEndedAt
+                ? `Finalized ${formatDate(contestEndedAt)}`
+                : "Use this after all Masters and Sunday team scores are final."}
+            </span>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => handleLockAction("end_contest")}
+              className="bg-masters-green text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-green-800"
+            >
+              End Contest
+            </button>
+            <button
+              onClick={() => handleLockAction("reopen_contest")}
+              className="bg-gray-200 text-gray-700 text-sm font-bold px-4 py-2 rounded-lg hover:bg-gray-300"
+            >
+              Reopen Contest
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Ending the contest marks the leaderboard payouts as official. Reopen it if you still need to correct scores.
+          </p>
+        </div>
       </section>
 
       {/* ── Payout Calculator ── */}

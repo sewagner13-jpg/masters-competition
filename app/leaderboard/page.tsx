@@ -5,8 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { LastUpdatedBanner } from "@/components/LastUpdatedBanner";
 import { LeaderboardChat } from "@/components/LeaderboardChat";
 import { AwardedMoneyTable } from "@/components/AwardedMoneyTable";
+import { FinalPayoutTable } from "@/components/FinalPayoutTable";
 import { PrizeMoneyTable } from "@/components/PrizeMoneyTable";
-import { getAwardedMoneySummary, getDailyPayoutMap, getPrizeMoneySummary } from "@/lib/payouts";
+import { getAwardedMoneySummary, getDailyPayoutMap, getFinalPayoutSummary, getPrizeMoneySummary } from "@/lib/payouts";
 import Link from "next/link";
 import type { EntryScoreResult, PlayerScoreResult } from "@/lib/scoring/engine";
 
@@ -16,6 +17,7 @@ interface LeaderboardResponse {
   leaderboard: EntryScoreResult[];
   isLocked: boolean;
   activeRound: 1 | 2 | 3 | 4 | null;
+  contestEndedAt: string | null;
   lastSyncedAt: string | null;
 }
 
@@ -59,6 +61,19 @@ function formatTeeTime(teeTime: string | null): string | null {
   } catch {
     return null;
   }
+}
+
+function formatContestEndedAt(endedAt: string | null): string | null {
+  if (!endedAt) return null;
+
+  return new Date(endedAt).toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
 }
 
 function formatPlayerStatus(player: PlayerScoreResult): string {
@@ -378,6 +393,10 @@ function LeaderboardContent() {
   const awardedMoneySummary = data
     ? getAwardedMoneySummary(data.leaderboard, todayRound)
     : null;
+  const finalPayoutSummary = data?.contestEndedAt
+    ? getFinalPayoutSummary(data.leaderboard)
+    : null;
+  const contestEndedLabel = formatContestEndedAt(data?.contestEndedAt ?? null);
 
   const sortedEntries = data
     ? [...data.leaderboard].sort((a, b) => {
@@ -420,6 +439,12 @@ function LeaderboardContent() {
 
       {data && <div className="mb-4"><LastUpdatedBanner lastSyncedAt={data.lastSyncedAt} /></div>}
 
+      {data?.contestEndedAt && (
+        <div className="mb-4 bg-masters-green/10 border border-masters-green/30 rounded-lg px-4 py-3 text-sm text-masters-green text-center">
+          🏁 Contest finalized{contestEndedLabel ? ` ${contestEndedLabel}` : ""} · Final payouts below are official.
+        </div>
+      )}
+
       {/* Lock banner */}
       {data && !data.isLocked && (
         <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-800 text-center">
@@ -438,6 +463,14 @@ function LeaderboardContent() {
           <LeaderboardChat />
           <TopLeadersCard entries={sortedEntries} tab={tab} todayRound={todayRound} />
         </div>
+      )}
+
+      {finalPayoutSummary && (
+        <FinalPayoutTable
+          rows={finalPayoutSummary.rows}
+          completedRounds={finalPayoutSummary.completedRounds}
+          finalizedAt={data?.contestEndedAt ?? null}
+        />
       )}
 
       {prizeMoneySummary && (

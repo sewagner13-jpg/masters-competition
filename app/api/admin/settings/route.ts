@@ -3,7 +3,7 @@
  *
  * GET  /api/admin/settings        — load all entries with Sunday fields + lock state
  * POST /api/admin/settings        — update Sunday rep/team/isPlayingSunday for an entry
- * PUT  /api/admin/settings/lock   — force lock or force unlock the contest
+ * PATCH /api/admin/settings       — lock/unlock/finalize contest controls
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -59,8 +59,9 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     entries,
     lockState,
+    contestEndedAt: settings?.endedAt ?? null,
     lockDeadline: LOCK_DEADLINE.toISOString(),
-    settings: settings ?? { id: "main", isForceUnlocked: false, lockedAt: null },
+    settings: settings ?? { id: "main", isForceUnlocked: false, lockedAt: null, endedAt: null },
   });
 }
 
@@ -92,7 +93,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/** PATCH — toggle force-lock or force-unlock */
+/** PATCH — toggle force-lock, force-unlock, or contest finalization */
 export async function PATCH(req: NextRequest) {
   if (!isAdminAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -100,8 +101,10 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { action } = body; // "force_lock" | "force_unlock" | "clear_override"
+    const { action } = body;
+    // "force_lock" | "force_unlock" | "clear_override" | "end_contest" | "reopen_contest"
 
+    const existing = await prisma.contestSettings.findUnique({ where: { id: "main" } });
     let data: Record<string, unknown> = {};
 
     if (action === "force_lock") {
@@ -110,6 +113,14 @@ export async function PATCH(req: NextRequest) {
       data = { isForceUnlocked: true, lockedAt: null };
     } else if (action === "clear_override") {
       data = { isForceUnlocked: false, lockedAt: null };
+    } else if (action === "end_contest") {
+      data = {
+        endedAt: new Date(),
+        isForceUnlocked: false,
+        lockedAt: existing?.lockedAt ?? new Date(),
+      };
+    } else if (action === "reopen_contest") {
+      data = { endedAt: null };
     } else {
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
@@ -120,7 +131,12 @@ export async function PATCH(req: NextRequest) {
       create: { id: "main", ...data },
     });
 
-    return NextResponse.json({ ok: true });
+    const updated = await prisma.contestSettings.findUnique({ where: { id: "main" } });
+
+    return NextResponse.json({
+      ok: true,
+      contestEndedAt: updated?.endedAt ?? null,
+    });
   } catch (err) {
     console.error("[api/admin/settings PATCH] Error:", err);
     return NextResponse.json({ error: "Failed to update lock state" }, { status: 500 });

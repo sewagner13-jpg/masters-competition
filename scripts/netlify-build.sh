@@ -4,6 +4,8 @@ set -euo pipefail
 npx prisma generate
 
 if [ "${CONTEXT:-}" = "production" ]; then
+  echo "Netlify production deploy: applying Prisma schema changes"
+  npx prisma db push --skip-generate
   echo "Netlify production deploy: syncing player pool to database"
   npm run db:seed
 else

@@ -69,6 +69,7 @@ export async function GET(req: NextRequest) {
       leaderboard,
       isLocked: locked,
       activeRound,
+      contestEndedAt: settings?.endedAt ?? null,
       lastSyncedAt: lastSync?.completedAt ?? null,
     });
   } catch (err) {
