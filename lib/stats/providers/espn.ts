@@ -327,12 +327,16 @@ export class EspnStatsProvider implements StatsProvider {
           continue;
         }
 
-        const event =
-          events.find(
-            (candidate) =>
-              candidate.name?.toLowerCase().includes("masters") ||
-              candidate.shortName?.toLowerCase().includes("masters")
-          ) ?? events[0];
+        const event = events.find(
+          (candidate) =>
+            candidate.name?.toLowerCase().includes("masters") ||
+            candidate.shortName?.toLowerCase().includes("masters")
+        );
+
+        if (!event) {
+          console.warn(`[ESPN] ${label}: no Masters event found in response`);
+          continue;
+        }
 
         const competitors = event?.competitions?.[0]?.competitors ?? [];
         if (competitors.length > 0) {

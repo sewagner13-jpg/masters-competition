@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { getStatsProvider } from "./provider";
 import { computeAllEntryScores } from "@/lib/scoring/engine";
 import { EVENT_NAME } from "@/lib/constants";
-import { isWithinSyncWindow } from "@/lib/timezone";
+import { isWithinSyncSeason, isWithinSyncWindow } from "@/lib/timezone";
 
 export interface SyncResult {
   status: "success" | "failed" | "skipped";
@@ -51,6 +51,14 @@ export async function runStatSync(options?: {
   forceSync?: boolean; // bypass time window check (for manual admin trigger)
 }): Promise<SyncResult> {
   const forceSync = options?.forceSync ?? false;
+
+  if (!isWithinSyncSeason()) {
+    const run = await prisma.syncRun.create({
+      data: { status: "skipped", message: "Outside Masters sync season", completedAt: new Date() },
+    });
+    console.log(`[sync] Skipped — outside Masters sync season (run ${run.id})`);
+    return { status: "skipped", message: "Outside Masters sync season", recordsUpdated: 0 };
+  }
 
   // Check time window unless forced
   if (!forceSync && !isWithinSyncWindow()) {
