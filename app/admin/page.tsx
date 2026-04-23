@@ -5,7 +5,7 @@ import { PlayerTable, type Player } from "@/components/PlayerTable";
 import { RosterBuilder } from "@/components/RosterBuilder";
 import { SalaryTracker } from "@/components/SalaryTracker";
 import { ROSTER_SIZE, SALARY_CAP, BUY_IN } from "@/lib/constants";
-import { PAYOUT_STRUCTURE } from "@/lib/payouts";
+import { PAYOUT_STRUCTURE, getFinalPayoutSummary } from "@/lib/payouts";
 import { holeScoreToPoints } from "@/lib/scoring/config";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -16,6 +16,7 @@ interface EntryAdmin {
   sundayRepName: string | null;
   sundayTeamName: string | null;
   isPlayingSunday: boolean;
+  payoutPaidAt: string | null;
   publicMessage: string | null;
   scoreR1: number;
   scoreR2: number;
@@ -274,6 +275,12 @@ export default function AdminPage() {
     loadAll();
   }
 
+  async function setPayoutPaid(entryId: string, paid: boolean) {
+    await saveEntrySettings(entryId, {
+      payoutPaidAt: paid ? new Date().toISOString() : null,
+    } as Partial<EntryAdmin>);
+  }
+
   function resetTeamEditor() {
     setEditingTeamId(null);
     setNewTeamName("");
@@ -368,6 +375,27 @@ export default function AdminPage() {
     );
   }
 
+  const finalPayoutSummary = contestEndedAt
+    ? getFinalPayoutSummary(
+        entries.map((entry) => ({
+          entryId: entry.id,
+          userName: entry.userName,
+          scoreR1: entry.scoreR1,
+          scoreR2: entry.scoreR2,
+          scoreR3: entry.scoreR3,
+          scoreR4: entry.scoreR4,
+          scoreOverall: entry.score,
+          payoutPaidAt: entry.payoutPaidAt,
+        }))
+      )
+    : null;
+  const remainingPayout = finalPayoutSummary
+    ? finalPayoutSummary.rows.reduce(
+        (sum, row) => sum + (row.isPaid ? 0 : row.totalPayout),
+        0
+      )
+    : 0;
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -438,6 +466,65 @@ export default function AdminPage() {
       <section className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
         <h2 className="font-bold text-gray-800 mb-1">Payout Calculator</h2>
         <PayoutCalculator entryCount={entries.length} />
+      </section>
+
+      <section className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
+        <h2 className="font-bold text-gray-800 mb-1">Payout Tracker</h2>
+        {contestEndedAt ? (
+          <>
+            <p className="text-xs text-gray-500 mb-4">
+              Final payouts are official. Remaining to pay:{" "}
+              <strong className="text-amber-700">{usd(remainingPayout)}</strong>
+            </p>
+            {finalPayoutSummary && finalPayoutSummary.rows.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-500 border-b text-xs">
+                      <th className="pb-2 pr-3">Entry</th>
+                      <th className="pb-2 pr-3 text-right">Daily</th>
+                      <th className="pb-2 pr-3 text-right">Overall / Last</th>
+                      <th className="pb-2 pr-3 text-right">Total</th>
+                      <th className="pb-2 pr-3">Status</th>
+                      <th className="pb-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {finalPayoutSummary.rows.map((row) => (
+                      <tr key={row.entryId} className="border-b border-gray-50">
+                        <td className="py-2 pr-3 font-medium text-gray-900">{row.userName}</td>
+                        <td className="py-2 pr-3 text-right font-mono text-xs">{usd(row.dailyWon)}</td>
+                        <td className="py-2 pr-3 text-right font-mono text-xs">{usd(row.overallPayout)}</td>
+                        <td className="py-2 pr-3 text-right font-mono font-bold text-masters-green">{usd(row.totalPayout)}</td>
+                        <td className="py-2 pr-3 text-xs text-gray-500">
+                          {row.isPaid ? `Paid ${formatDate(row.payoutPaidAt)}` : "Still owed"}
+                        </td>
+                        <td className="py-2">
+                          <button
+                            onClick={() => setPayoutPaid(row.entryId, !row.isPaid)}
+                            className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+                              row.isPaid
+                                ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                : "bg-masters-green text-white hover:bg-green-800"
+                            }`}
+                          >
+                            {row.isPaid ? "Mark unpaid" : "Mark paid"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">No final payouts yet.</p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-gray-500">
+            End the contest first. Once the final board is official, you can track who has been paid here.
+          </p>
+        )}
       </section>
 
       {/* ── Stat Sync ── */}

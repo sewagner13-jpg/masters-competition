@@ -40,6 +40,7 @@ export interface EntryScoreResult {
   scoreR4: number;
   sundayBonusPoints: number;
   scoreOverall: number;
+  payoutPaidAt: string | null;
   players: PlayerScoreResult[];
   sundayRepName: string | null;
   sundayTeamName: string | null;
@@ -185,6 +186,7 @@ export async function getLeaderboard(isLocked: boolean): Promise<EntryScoreResul
     scoreR4: entry.scoreR4,
     sundayBonusPoints: entry.sundayBonusPoints,
     scoreOverall: entry.score,
+    payoutPaidAt: entry.payoutPaidAt?.toISOString() ?? null,
     players: isLocked
       ? entry.players.map((ep) => {
           const stat = ep.player.stats[0];

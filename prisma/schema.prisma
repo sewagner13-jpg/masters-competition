@@ -37,6 +37,7 @@ model Entry {
   sundayRepName     String?  // who represents this entry on Sunday
   sundayTeamName    String?  // which Sunday team is assigned
   isPlayingSunday   Boolean  @default(true)
+  payoutPaidAt      DateTime? // when the final payout for this entry was paid
 
   // Scoring — one bucket per round + Sunday bonus + overall
   scoreR1           Float @default(0)  // Thursday

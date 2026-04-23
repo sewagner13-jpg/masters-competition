@@ -8,6 +8,7 @@ export interface PrizeMoneyEntry {
   scoreR3: number;
   scoreR4: number;
   scoreOverall: number;
+  payoutPaidAt?: string | Date | null;
 }
 
 export interface PrizeMoneyRow {
@@ -43,6 +44,8 @@ export interface FinalPayoutRow {
   dailyWon: number;
   overallPayout: number;
   totalPayout: number;
+  payoutPaidAt: string | null;
+  isPaid: boolean;
 }
 
 export interface FinalPayoutSummary {
@@ -243,6 +246,14 @@ export function getAwardedMoneySummary(
 
 export function getFinalPayoutSummary(entries: PrizeMoneyEntry[]): FinalPayoutSummary {
   const summary = getPrizeMoneySummary(entries, null);
+  const payoutPaidAtByEntryId = new Map(
+    entries.map((entry) => [
+      entry.entryId,
+      entry.payoutPaidAt instanceof Date
+        ? entry.payoutPaidAt.toISOString()
+        : entry.payoutPaidAt ?? null,
+    ])
+  );
 
   const rows = summary.rows
     .map((row) => ({
@@ -251,9 +262,12 @@ export function getFinalPayoutSummary(entries: PrizeMoneyEntry[]): FinalPayoutSu
       dailyWon: row.wonSoFar,
       overallPayout: row.overallRace,
       totalPayout: row.totalLive,
+      payoutPaidAt: payoutPaidAtByEntryId.get(row.entryId) ?? null,
+      isPaid: (payoutPaidAtByEntryId.get(row.entryId) ?? null) !== null,
     }))
     .filter((row) => row.totalPayout > EPSILON)
     .sort((a, b) => {
+      if (a.isPaid !== b.isPaid) return Number(a.isPaid) - Number(b.isPaid);
       if (Math.abs(b.totalPayout - a.totalPayout) > EPSILON) return b.totalPayout - a.totalPayout;
       if (Math.abs(b.overallPayout - a.overallPayout) > EPSILON) return b.overallPayout - a.overallPayout;
       return a.userName.localeCompare(b.userName);

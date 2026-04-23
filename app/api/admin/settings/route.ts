@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
         sundayRepName: true,
         sundayTeamName: true,
         isPlayingSunday: true,
+        payoutPaidAt: true,
         publicMessage: true,
         scoreR1: true,
         scoreR2: true,
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { entryId, sundayRepName, sundayTeamName, isPlayingSunday } = body;
+    const { entryId, sundayRepName, sundayTeamName, isPlayingSunday, payoutPaidAt } = body;
 
     if (!entryId) {
       return NextResponse.json({ error: "entryId is required" }, { status: 400 });
@@ -83,6 +84,9 @@ export async function POST(req: NextRequest) {
     if (sundayRepName !== undefined) updateData.sundayRepName = sundayRepName || null;
     if (sundayTeamName !== undefined) updateData.sundayTeamName = sundayTeamName || null;
     if (isPlayingSunday !== undefined) updateData.isPlayingSunday = Boolean(isPlayingSunday);
+    if (payoutPaidAt !== undefined) {
+      updateData.payoutPaidAt = payoutPaidAt ? new Date(payoutPaidAt) : null;
+    }
 
     await prisma.entry.update({ where: { id: entryId }, data: updateData });
     await computeAllEntryScores();

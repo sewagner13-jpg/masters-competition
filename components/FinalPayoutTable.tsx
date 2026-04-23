@@ -27,6 +27,19 @@ function formatFinalizedAt(finalizedAt: string | null) {
   });
 }
 
+function formatPaidAt(paidAt: string | null) {
+  if (!paidAt) return null;
+
+  return new Date(paidAt).toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
 export function FinalPayoutTable({
   rows,
   completedRounds,
@@ -37,6 +50,7 @@ export function FinalPayoutTable({
   finalizedAt: string | null;
 }) {
   const totalToPay = rows.reduce((sum, row) => sum + row.totalPayout, 0);
+  const totalRemaining = rows.reduce((sum, row) => sum + (row.isPaid ? 0 : row.totalPayout), 0);
   const roundsLabel = completedRounds.length
     ? completedRounds.map((round) => ROUND_LABELS[round]).join(", ")
     : "None yet";
@@ -53,6 +67,8 @@ export function FinalPayoutTable({
         <p className="mt-1 text-xs leading-5 text-gray-500">
           Daily rounds paid: {roundsLabel}. Total to pay:{" "}
           <span className="font-semibold text-masters-green">{usd(totalToPay)}</span>
+          <span className="mx-1.5 text-gray-300">•</span>
+          Remaining: <span className="font-semibold text-amber-700">{usd(totalRemaining)}</span>
         </p>
       </div>
 
@@ -69,6 +85,7 @@ export function FinalPayoutTable({
                 <th className="py-2 pr-4 font-semibold">Entry</th>
                 <th className="py-2 pr-4 text-right font-semibold">Daily Won</th>
                 <th className="py-2 pr-4 text-right font-semibold">Overall / Last</th>
+                <th className="py-2 pr-4 font-semibold">Status</th>
                 <th className="py-2 text-right font-semibold">Total Owed</th>
               </tr>
             </thead>
@@ -79,6 +96,24 @@ export function FinalPayoutTable({
                   <td className="py-2 pr-4 font-medium text-gray-900">{row.userName}</td>
                   <td className="py-2 pr-4 text-right font-mono text-gray-700">{usd(row.dailyWon)}</td>
                   <td className="py-2 pr-4 text-right font-mono text-gray-700">{usd(row.overallPayout)}</td>
+                  <td className="py-2 pr-4">
+                    {row.isPaid ? (
+                      <div className="text-xs">
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 font-semibold text-green-800">
+                          Paid
+                        </span>
+                        {formatPaidAt(row.payoutPaidAt) && (
+                          <div className="mt-1 text-[11px] text-gray-500">
+                            {formatPaidAt(row.payoutPaidAt)}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                        Still owed
+                      </span>
+                    )}
+                  </td>
                   <td className="py-2 text-right font-mono font-bold text-masters-green">{usd(row.totalPayout)}</td>
                 </tr>
               ))}
